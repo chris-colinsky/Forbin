@@ -46,7 +46,7 @@ test: ## Run all tests
 
 test-unit: ## Run unit tests only
 	@echo "$(GREEN)Running unit tests...$(NC)"
-	pytest tests/test_forbin.py -v
+	pytest tests/ -v
 	@echo "$(GREEN)✓ Unit tests passed$(NC)"
 
 test-integration: ## Run integration tests only
@@ -66,17 +66,17 @@ test-watch: ## Run tests in watch mode
 
 lint: ## Run linter (ruff)
 	@echo "$(GREEN)Running linter...$(NC)"
-	ruff check forbin.py tests/
+	ruff check forbin tests/
 	@echo "$(GREEN)✓ Linting complete$(NC)"
 
 format: ## Format code with black
 	@echo "$(GREEN)Formatting code...$(NC)"
-	black forbin.py tests/
+	black forbin tests/
 	@echo "$(GREEN)✓ Code formatted$(NC)"
 
 format-check: ## Check code formatting without making changes
 	@echo "$(GREEN)Checking code formatting...$(NC)"
-	black --check forbin.py tests/
+	black --check forbin tests/
 	@echo "$(GREEN)✓ Code formatting is correct$(NC)"
 
 check: format-check lint test ## Run all checks (format, lint, test)
@@ -93,14 +93,14 @@ clean: ## Clean up generated files
 
 run: ## Run the tool in interactive mode
 	@echo "$(GREEN)Starting Forbin...$(NC)"
-	python forbin.py
+	python run_forbin.py
 
 run-test: ## Run the tool in connectivity test mode
 	@echo "$(GREEN)Running connectivity test...$(NC)"
-	python forbin.py --test
+	python run_forbin.py --test
 
 run-help: ## Show tool help
-	python forbin.py --help
+	python run_forbin.py --help
 
 pre-commit-install: ## Install pre-commit hooks
 	@echo "$(GREEN)Installing pre-commit hooks...$(NC)"
@@ -113,7 +113,7 @@ pre-commit-run: ## Run pre-commit hooks manually
 
 validate: ## Validate Python syntax
 	@echo "$(GREEN)Validating Python syntax...$(NC)"
-	python -m py_compile forbin.py
+	python -m py_compile forbin/*.py
 	python -m py_compile tests/*.py
 	@echo "$(GREEN)✓ Syntax is valid$(NC)"
 

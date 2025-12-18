@@ -6,7 +6,13 @@ from unittest.mock import Mock, AsyncMock, patch
 from io import StringIO
 
 # Import the module to test
-import forbin.forbin
+# Import the modules to test
+import forbin.tools
+import forbin.display
+import forbin.client
+import forbin.utils
+import forbin.cli
+import forbin.config
 
 
 class TestParameterParsing:
@@ -14,53 +20,53 @@ class TestParameterParsing:
 
     def test_parse_string(self):
         """Test parsing string values."""
-        result = forbin.parse_parameter_value("hello", "string")
+        result = forbin.tools.parse_parameter_value("hello", "string")
         assert result == "hello"
 
     def test_parse_integer(self):
         """Test parsing integer values."""
-        result = forbin.parse_parameter_value("42", "integer")
+        result = forbin.tools.parse_parameter_value("42", "integer")
         assert result == 42
         assert isinstance(result, int)
 
     def test_parse_number(self):
         """Test parsing float values."""
-        result = forbin.parse_parameter_value("3.14", "number")
+        result = forbin.tools.parse_parameter_value("3.14", "number")
         assert result == 3.14
         assert isinstance(result, float)
 
     def test_parse_boolean_true(self):
         """Test parsing boolean true values."""
         for value in ["true", "True", "t", "yes", "y", "1"]:
-            result = forbin.parse_parameter_value(value, "boolean")
+            result = forbin.tools.parse_parameter_value(value, "boolean")
             assert result is True
 
     def test_parse_boolean_false(self):
         """Test parsing boolean false values."""
         for value in ["false", "False", "f", "no", "n", "0"]:
-            result = forbin.parse_parameter_value(value, "boolean")
+            result = forbin.tools.parse_parameter_value(value, "boolean")
             assert result is False
 
     def test_parse_object(self):
         """Test parsing JSON object."""
         json_str = '{"key": "value", "number": 42}'
-        result = forbin.parse_parameter_value(json_str, "object")
+        result = forbin.tools.parse_parameter_value(json_str, "object")
         assert result == {"key": "value", "number": 42}
 
     def test_parse_array(self):
         """Test parsing JSON array."""
         json_str = '[1, 2, 3, "four"]'
-        result = forbin.parse_parameter_value(json_str, "array")
+        result = forbin.tools.parse_parameter_value(json_str, "array")
         assert result == [1, 2, 3, "four"]
 
     def test_parse_empty_string(self):
         """Test parsing empty string."""
-        result = forbin.parse_parameter_value("", "string")
+        result = forbin.tools.parse_parameter_value("", "string")
         assert result is None
 
     def test_parse_whitespace(self):
         """Test parsing whitespace."""
-        result = forbin.parse_parameter_value("   ", "string")
+        result = forbin.tools.parse_parameter_value("   ", "string")
         assert result is None
 
 
@@ -69,7 +75,7 @@ class TestDisplayFunctions:
 
     def test_display_tools_with_tools(self, mock_tool_list, capsys):
         """Test displaying tools list."""
-        forbin.display_tools(mock_tool_list)
+        forbin.display.display_tools(mock_tool_list)
         captured = capsys.readouterr()
         assert "AVAILABLE TOOLS" in captured.out
         assert "test_tool" in captured.out
@@ -77,13 +83,13 @@ class TestDisplayFunctions:
 
     def test_display_tools_empty(self, capsys):
         """Test displaying empty tools list."""
-        forbin.display_tools([])
+        forbin.display.display_tools([])
         captured = capsys.readouterr()
         assert "No tools available" in captured.out
 
     def test_display_tool_schema_with_params(self, mock_tool, capsys):
         """Test displaying tool schema with parameters."""
-        forbin.display_tool_schema(mock_tool)
+        forbin.display.display_tool_schema(mock_tool)
         captured = capsys.readouterr()
         assert "test_tool" in captured.out
         assert "param1" in captured.out
@@ -93,7 +99,7 @@ class TestDisplayFunctions:
 
     def test_display_tool_schema_no_params(self, mock_tool_no_params, capsys):
         """Test displaying tool schema without parameters."""
-        forbin.display_tool_schema(mock_tool_no_params)
+        forbin.display.display_tool_schema(mock_tool_no_params)
         captured = capsys.readouterr()
         assert "simple_tool" in captured.out
         assert "No input parameters required" in captured.out
@@ -106,7 +112,7 @@ class TestWakeUpServer:
     async def test_wake_up_server_success(self, mock_httpx_client):
         """Test successful server wake-up."""
         with patch("httpx.AsyncClient", return_value=mock_httpx_client):
-            result = await forbin.wake_up_server(
+            result = await forbin.client.wake_up_server(
                 "http://test.local/health", max_attempts=3, wait_seconds=0.1
             )
             assert result is True
@@ -129,7 +135,7 @@ class TestWakeUpServer:
         mock_client.get = AsyncMock(side_effect=[mock_response_fail, mock_response_success])
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            result = await forbin.wake_up_server(
+            result = await forbin.client.wake_up_server(
                 "http://test.local/health", max_attempts=3, wait_seconds=0.1
             )
             assert result is True
@@ -148,7 +154,7 @@ class TestWakeUpServer:
         mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
-            result = await forbin.wake_up_server(
+            result = await forbin.client.wake_up_server(
                 "http://test.local/health", max_attempts=2, wait_seconds=0.1
             )
             assert result is False
@@ -162,11 +168,11 @@ class TestConnectToMCPServer:
     async def test_connect_success(self, mock_mcp_client):
         """Test successful connection to MCP server."""
         with (
-            patch("forbin.MCP_SERVER_URL", "http://test.local/mcp"),
-            patch("forbin.MCP_TOKEN", "test-token"),
-            patch("forbin.Client", return_value=mock_mcp_client),
+            patch("forbin.config.MCP_SERVER_URL", "http://test.local/mcp"),
+            patch("forbin.config.MCP_TOKEN", "test-token"),
+            patch("forbin.client.Client", return_value=mock_mcp_client),
         ):
-            client = await forbin.connect_to_mcp_server(max_attempts=3, wait_seconds=0.1)
+            client = await forbin.client.connect_to_mcp_server(max_attempts=3, wait_seconds=0.1)
 
             assert client is not None
             mock_mcp_client.__aenter__.assert_called_once()
@@ -184,11 +190,11 @@ class TestConnectToMCPServer:
         mock_client_success.initialize_result = {}
 
         with (
-            patch("forbin.MCP_SERVER_URL", "http://test.local/mcp"),
-            patch("forbin.MCP_TOKEN", "test-token"),
-            patch("forbin.Client", side_effect=[mock_client_fail, mock_client_success]),
+            patch("forbin.config.MCP_SERVER_URL", "http://test.local/mcp"),
+            patch("forbin.config.MCP_TOKEN", "test-token"),
+            patch("forbin.client.Client", side_effect=[mock_client_fail, mock_client_success]),
         ):
-            client = await forbin.connect_to_mcp_server(max_attempts=2, wait_seconds=0.1)
+            client = await forbin.client.connect_to_mcp_server(max_attempts=2, wait_seconds=0.1)
 
             assert client is not None
 
@@ -199,11 +205,11 @@ class TestConnectToMCPServer:
         mock_client.__aenter__ = AsyncMock(side_effect=asyncio.TimeoutError)
 
         with (
-            patch("forbin.MCP_SERVER_URL", "http://test.local/mcp"),
-            patch("forbin.MCP_TOKEN", "test-token"),
-            patch("forbin.Client", return_value=mock_client),
+            patch("forbin.config.MCP_SERVER_URL", "http://test.local/mcp"),
+            patch("forbin.config.MCP_TOKEN", "test-token"),
+            patch("forbin.client.Client", return_value=mock_client),
         ):
-            client = await forbin.connect_to_mcp_server(max_attempts=2, wait_seconds=0.1)
+            client = await forbin.client.connect_to_mcp_server(max_attempts=2, wait_seconds=0.1)
 
             assert client is None
 
@@ -214,7 +220,7 @@ class TestListTools:
     @pytest.mark.asyncio
     async def test_list_tools_success(self, mock_mcp_client):
         """Test successful tool listing."""
-        tools = await forbin.list_tools(mock_mcp_client)
+        tools = await forbin.tools.list_tools(mock_mcp_client)
 
         assert len(tools) > 0
         assert tools[0].name == "test_tool"
@@ -227,7 +233,7 @@ class TestListTools:
         mock_client.list_tools = AsyncMock(side_effect=asyncio.TimeoutError("Timeout"))
 
         with pytest.raises(asyncio.TimeoutError):
-            await forbin.list_tools(mock_client)
+            await forbin.tools.list_tools(mock_client)
 
 
 class TestCallTool:
@@ -238,7 +244,7 @@ class TestCallTool:
         """Test successful tool call."""
         params = {"param": "value"}
 
-        await forbin.call_tool(mock_mcp_client, mock_tool, params)
+        await forbin.tools.call_tool(mock_mcp_client, mock_tool, params)
 
         captured = capsys.readouterr()
         assert "CALLING TOOL" in captured.out
@@ -253,7 +259,7 @@ class TestCallTool:
         mock_mcp_client.call_tool = AsyncMock(side_effect=Exception("Tool execution failed"))
         params = {"param": "value"}
 
-        await forbin.call_tool(mock_mcp_client, mock_tool, params)
+        await forbin.tools.call_tool(mock_mcp_client, mock_tool, params)
 
         captured = capsys.readouterr()
         assert "Tool execution failed" in captured.out
@@ -265,7 +271,7 @@ class TestFilteredStderr:
     def test_filter_suppressed_pattern(self):
         """Test that suppressed patterns are filtered."""
         original_stderr = StringIO()
-        filtered = forbin.FilteredStderr(original_stderr)
+        filtered = forbin.utils.FilteredStderr(original_stderr)
 
         filtered.write("Error in post_writer\n")
         filtered.write("Session termination failed\n")
@@ -275,7 +281,7 @@ class TestFilteredStderr:
     def test_filter_normal_output(self):
         """Test that normal output passes through."""
         original_stderr = StringIO()
-        filtered = forbin.FilteredStderr(original_stderr)
+        filtered = forbin.utils.FilteredStderr(original_stderr)
 
         filtered.write("Normal error message\n")
 
@@ -284,7 +290,7 @@ class TestFilteredStderr:
     def test_filter_suppression_ends_on_blank_line(self):
         """Test that suppression ends on blank line."""
         original_stderr = StringIO()
-        filtered = forbin.FilteredStderr(original_stderr)
+        filtered = forbin.utils.FilteredStderr(original_stderr)
 
         filtered.write("Error in post_writer\n")
         filtered.write("traceback details\n")
@@ -302,7 +308,7 @@ class TestMainFunction:
     async def test_main_help(self, capsys):
         """Test help flag."""
         with patch("sys.argv", ["forbin.py", "--help"]):
-            await forbin.main()
+            await forbin.cli.main()
 
             captured = capsys.readouterr()
             assert "MCP Remote Tool Tester" in captured.out
@@ -313,14 +319,14 @@ class TestMainFunction:
         """Test connectivity test mode."""
         with (
             patch("sys.argv", ["forbin.py", "--test"]),
-            patch("forbin.MCP_SERVER_URL", "http://test.local/mcp"),
-            patch("forbin.MCP_TOKEN", "test-token"),
-            patch("forbin.MCP_HEALTH_URL", "http://test.local/health"),
+            patch("forbin.config.MCP_SERVER_URL", "http://test.local/mcp"),
+            patch("forbin.config.MCP_TOKEN", "test-token"),
+            patch("forbin.config.MCP_HEALTH_URL", "http://test.local/health"),
             patch("httpx.AsyncClient", return_value=mock_httpx_client),
-            patch("forbin.Client", return_value=mock_mcp_client),
+            patch("forbin.client.Client", return_value=mock_mcp_client),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
-            await forbin.main()
+            await forbin.cli.main()
 
             # Should have attempted to wake up server and connect
             mock_httpx_client.get.assert_called()

@@ -38,12 +38,12 @@ dependencies = [
 
 
 [project.urls]
-Repository = "https://github.com/Forbin/forbin"
-Issues = "https://github.com/Forbin/forbin/issues"
-Documentation = "https://github.com/Forbin/README.md"
+Repository = "https://github.com/chris-colinsky/Forbin"
+Issues = "https://github.com/chris-colinsky/Forbin/issues"
+Documentation = "https://github.com/chris-colinsky/Forbin/blob/main/README.md"
 
 [project.scripts]
-forbin = "forbin:cli"
+forbin = "forbin:main"
 
 [build-system]
 requires = ["hatchling"]

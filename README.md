@@ -1,6 +1,6 @@
 # Forbin
 
-[![CI](https://github.com/yourusername/forbin/workflows/CI/badge.svg)](https://github.com/yourusername/forbin/actions)
+[![CI](https://github.com/chris-colinsky/Forbin/actions/workflows/ci.yml/badge.svg?branch=release/v1.0.0)](https://github.com/chris-colinsky/Forbin/actions)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
@@ -50,8 +50,8 @@ An interactive CLI tool for testing remote MCP (Model Context Protocol) servers 
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/forbin.git
-cd forbin
+git clone https://github.com/chris-colinsky/Forbin.git
+cd Forbin
 
 # Install dependencies
 uv sync
@@ -106,7 +106,7 @@ MCP_TOKEN=prod-token-xyz
 Run the interactive tool browser:
 
 ```bash
-python main.py
+python -m forbin
 ```
 
 This will:
@@ -190,7 +190,7 @@ Total records: 1,234
 Test server connectivity without running tools:
 
 ```bash
-python main.py --test
+python -m forbin --test
 ```
 
 This is useful for:
@@ -202,7 +202,7 @@ This is useful for:
 ### Help
 
 ```bash
-python main.py --help
+python -m forbin --help
 ```
 
 ## How It Works
@@ -232,7 +232,16 @@ The tool includes sophisticated error handling:
 
 ```
 mcp-remote-tool-tester/
- main.py              # Main CLI application
+ forbin/              # Package directory
+   __init__.py
+   __main__.py
+   cli.py             # Main CLI application
+   client.py          # MCP connection logic
+   config.py          # Configuration
+   display.py         # UI logic
+   tools.py           # Tool handling
+   utils.py           # Utilities
+ run_forbin.py        # Entry script
  pyproject.toml       # Python project configuration
  uv.lock              # Dependency lock file
  .env.example         # Example environment configuration
@@ -252,10 +261,10 @@ mcp-remote-tool-tester/
 
 ```bash
 # Test connectivity only
-python main.py --test
+python -m forbin --test
 
 # Run interactive session with your test server
-python main.py
+python -m forbin
 ```
 
 ## FastAPI/FastMCP Server Compatibility
@@ -298,7 +307,7 @@ def health():
 
 ### "Connection error (server not ready)"
 
-- Increase the initialization wait time (edit `main.py` line 410)
+- Increase the initialization wait time (edit `forbin/client.py`)
 - Check your `MCP_SERVER_URL` is correct
 - Verify your `MCP_TOKEN` is valid
 
