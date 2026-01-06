@@ -424,6 +424,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },
     { name = "python-dotenv" },
+    { name = "rich" },
     { name = "tenacity" },
 ]
 
@@ -443,6 +444,7 @@ requires-dist = [
     { name = "fastmcp", specifier = ">=2.0.0" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
+    { name = "rich", specifier = ">=13.0.0" },
     { name = "tenacity", specifier = ">=9.0.0" },
 ]
 
