@@ -10,6 +10,10 @@
 
 An interactive CLI tool for testing remote MCP (Model Context Protocol) servers and their tools. Specifically designed for developing agentic workflows with support for suspended services (like Fly.io) that need automatic wake-up.
 
+## Name Origin
+
+**Forbin** is named after Dr. Charles Forbin from the 1970 film *Colossus: The Forbin Project*. In the movie, two supercomputers (American "Colossus" and Soviet "Guardian") learn to communicate with each other, establishing their own protocol and sharing information - a perfect parallel to the Model Context Protocol enabling AI systems and tools to communicate seamlessly.
+
 ## Table of Contents
 
 - [Features](#features)
@@ -17,6 +21,7 @@ An interactive CLI tool for testing remote MCP (Model Context Protocol) servers 
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
+- [How It Works](#how-it-works)
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
@@ -207,24 +212,19 @@ python -m forbin --help
 
 ## How It Works
 
-### Wake-Up Process
+Forbin is designed to handle the complexities of remote MCP servers, especially those on serverless or suspended platforms.
 
-For suspended services (like Fly.io apps), the tool uses a three-step approach:
+### Step Output Colors
 
-1. **Health Check Wake-Up** - Polls the health endpoint until it responds (6 attempts, 5 sec intervals)
-2. **Initialization Wait** - Waits 20 seconds for the MCP server to fully initialize
-3. **Connection with Retry** - Connects to MCP server with extended timeout (3 attempts, 30 sec timeout each)
+During operation, Forbin shows its progress using colored step indicators:
 
-This ensures reliable connections even to cold-started servers.
+- **[yellow]⏳ Yellow[/yellow]**: **In Progress** - The current action is being performed.
+- **[green]✓ Green[/green]**: **Success** - The step completed successfully.
+- **[dim]⊝ Dim[/dim]**: **Skip** - Step was skipped (e.g., wake-up not needed).
 
-### Error Handling
+### Detailed Documentation
 
-The tool includes sophisticated error handling:
-
-- **Session termination errors** are automatically suppressed (harmless FastMCP cleanup warnings)
-- **Connection errors** trigger automatic retries with exponential backoff
-- **Timeout errors** are gracefully handled with clear user feedback
-- **Invalid parameters** show helpful error messages with retry prompts
+For a deep dive into the wake-up process, connection retry logic, and technical architecture, see [DOCS.md](DOCS.md).
 
 ## Development
 
@@ -299,11 +299,12 @@ def health():
 
 ## Troubleshooting
 
-### "Failed to wake up server"
+### "Failed to wake up server" or "Failed to list tools: TimeoutError"
 
 - Verify your `MCP_HEALTH_URL` is correct
 - Check if the health endpoint is accessible
 - Try removing `MCP_HEALTH_URL` if your server doesn't suspend
+- For `TimeoutError` during listing, check if your server is extremely slow or overloaded
 
 ### "Connection error (server not ready)"
 
@@ -376,11 +377,6 @@ All pull requests must:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Name Origin
-
-**Forbin** is named after Dr. Charles Forbin from the 1970 film *Colossus: The Forbin Project*. In the movie, two supercomputers (American "Colossus" and Soviet "Guardian") learn to communicate with each other, establishing their own protocol and sharing information - a perfect parallel to the Model Context Protocol enabling AI systems and tools to communicate seamlessly.
-
-Just as Forbin built a system to enable communication between powerful computing systems, this tool helps developers test and debug MCP-based communication between AI agents and their tools.
 
 ## Acknowledgments
 
