@@ -2,13 +2,15 @@ import os
 import sys
 from dotenv import load_dotenv
 
+from typing import Optional
+
 # Load environment variables from .env file
 load_dotenv()
 
 # Get configuration from environment variables
-MCP_SERVER_URL = os.getenv("MCP_SERVER_URL")
-MCP_HEALTH_URL = os.getenv("MCP_HEALTH_URL")
-MCP_TOKEN = os.getenv("MCP_TOKEN")
+MCP_SERVER_URL: Optional[str] = os.getenv("MCP_SERVER_URL")
+MCP_HEALTH_URL: Optional[str] = os.getenv("MCP_HEALTH_URL")
+MCP_TOKEN: Optional[str] = os.getenv("MCP_TOKEN")
 
 
 def validate_config():

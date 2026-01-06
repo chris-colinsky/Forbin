@@ -5,6 +5,7 @@ from fastmcp.client import Client
 from fastmcp.client.auth import BearerAuth
 
 from . import config
+from .display import console
 
 
 async def wake_up_server(health_url: str, max_attempts: int = 6, wait_seconds: float = 5) -> bool:
@@ -20,31 +21,30 @@ async def wake_up_server(health_url: str, max_attempts: int = 6, wait_seconds: f
     Returns:
         True if server is awake, False otherwise
     """
-    print(f"\n{'=' * 70}")
-    print("WAKING UP SERVER")
-    print(f"{'=' * 70}")
-    print(f"Health endpoint: {health_url}\n")
-
     async with httpx.AsyncClient(timeout=30.0) as client:
-        for attempt in range(1, max_attempts + 1):
-            try:
-                print(f"Attempt {attempt}/{max_attempts}...", end=" ")
-                response = await client.get(health_url)
+        with console.status("  [dim]Polling health endpoint...[/dim]", spinner="dots") as status:
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    status.update(f"  [dim]Attempt {attempt}/{max_attempts}...[/dim]")
+                    response = await client.get(health_url)
 
-                if response.status_code == 200:
-                    print(f"✓ Server is awake! (status: {response.status_code})")
-                    return True
-                else:
-                    print(f"Server responded with status {response.status_code}")
+                    if response.status_code == 200:
+                        return True
+                    else:
+                        if attempt == max_attempts:
+                            console.print(
+                                f"  [yellow]Server responded with status {response.status_code}[/yellow]"
+                            )
 
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                print(f"Connection failed: {type(e).__name__}")
-            except Exception as e:
-                print(f"Unexpected error: {e}")
+                except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    if attempt == max_attempts:
+                        console.print(f"  [yellow]Connection failed: {type(e).__name__}[/yellow]")
+                except Exception as e:
+                    if attempt == max_attempts:
+                        console.print(f"  [red]Unexpected error: {e}[/red]")
 
-            if attempt < max_attempts:
-                print(f"Waiting {wait_seconds} seconds before next attempt...\n")
-                await asyncio.sleep(wait_seconds)
+                if attempt < max_attempts:
+                    await asyncio.sleep(wait_seconds)
 
     return False
 
@@ -63,37 +63,35 @@ async def connect_to_mcp_server(max_attempts: int = 3, wait_seconds: float = 5) 
     server_url = config.MCP_SERVER_URL or ""
     token = config.MCP_TOKEN or ""
 
-    for attempt in range(1, max_attempts + 1):
-        try:
-            print(f"\nConnection attempt {attempt}/{max_attempts}...")
+    with console.status("  [dim]Establishing connection...[/dim]", spinner="dots") as status:
+        for attempt in range(1, max_attempts + 1):
+            try:
+                status.update(f"  [dim]Attempt {attempt}/{max_attempts}...[/dim]")
 
-            client = Client(
-                server_url,
-                auth=BearerAuth(token=token),
-                init_timeout=30.0,  # Extended timeout for cold starts
-            )
+                client = Client(
+                    server_url,
+                    auth=BearerAuth(token=token),
+                    init_timeout=30.0,  # Extended timeout for cold starts
+                )
 
-            # Test the connection by entering the context
-            await client.__aenter__()
-            print("  ✓ Connected to MCP server")
-            print(f"    Initialized: {client.initialize_result is not None}")
+                # Test the connection by entering the context
+                await client.__aenter__()
+                return client
 
-            return client
+            except asyncio.TimeoutError:
+                if attempt == max_attempts:
+                    console.print("  [red]✗ Timeout (server not responding)[/red]")
+                if attempt < max_attempts:
+                    await asyncio.sleep(wait_seconds)
+            except Exception as e:
+                error_name = type(e).__name__
+                if attempt == max_attempts:
+                    if "BrokenResourceError" in error_name or "ClosedResourceError" in error_name:
+                        console.print("  [yellow]✗ Connection error (server not ready)[/yellow]")
+                    else:
+                        console.print(f"  [red]✗ {error_name}: {e}[/red]")
 
-        except asyncio.TimeoutError:
-            print(f"  ✗ Timeout on attempt {attempt} (server not responding)")
-            if attempt < max_attempts:
-                print(f"  Waiting {wait_seconds} seconds before retry...\n")
-                await asyncio.sleep(wait_seconds)
-        except Exception as e:
-            error_name = type(e).__name__
-            if "BrokenResourceError" in error_name or "ClosedResourceError" in error_name:
-                print(f"  ✗ Connection error on attempt {attempt} (server not ready)")
-            else:
-                print(f"  ✗ {error_name} on attempt {attempt}: {e}")
-
-            if attempt < max_attempts:
-                print(f"  Waiting {wait_seconds} seconds before retry...\n")
-                await asyncio.sleep(wait_seconds)
+                if attempt < max_attempts:
+                    await asyncio.sleep(wait_seconds)
 
     return None

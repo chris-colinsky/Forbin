@@ -1,58 +1,92 @@
 import asyncio
 import sys
 
+from rich.prompt import Prompt, Confirm
+
 from . import config
 from .config import validate_config
 from .utils import setup_logging
 from .client import connect_to_mcp_server, wake_up_server
 from .tools import list_tools, get_tool_parameters, call_tool
-from .display import display_tools, display_tool_schema
+from .display import (
+    display_tools,
+    display_tool_schema,
+    display_logo,
+    display_config_panel,
+    display_step,
+    console,
+)
 
 
 async def test_connectivity():
     """Test connectivity to the MCP server."""
-    print(f"\n{'=' * 70}")
-    print("CONNECTIVITY TEST")
-    print(f"{'=' * 70}\n")
-    print(f"Server URL: {config.MCP_SERVER_URL}")
-    print(f"Health URL: {config.MCP_HEALTH_URL or 'Not configured'}")
-    print()
+    display_logo()
+    display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
+
+    # Determine total steps
+    total_steps = 3 if config.MCP_HEALTH_URL else 2
+    current_step = 1
 
     # Step 1: Wake up server if health URL is configured
     if config.MCP_HEALTH_URL:
+        display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
         is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
 
         if not is_awake:
-            print("\n❌ Failed to wake up server")
+            console.print("[bold red]  ❌ Failed to wake up server[/bold red]\n")
             return
 
+        display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+
         # Wait for MCP server to fully initialize
-        print("\nWaiting 20 seconds for MCP server to fully initialize...")
-        await asyncio.sleep(20)
-    else:
-        print("No health URL configured - skipping wake-up")
+        with console.status(
+            "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
+        ):
+            await asyncio.sleep(20)
+
+        console.print()
+        current_step += 1
 
     # Step 2: Connect to MCP server
-    print(f"\n{'=' * 70}")
-    print("CONNECTING TO MCP SERVER")
-    print(f"{'=' * 70}")
-
+    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
     client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
 
     if not client:
-        print("\n❌ Failed to connect to MCP server")
+        console.print("[bold red]  ❌ Failed to connect to MCP server[/bold red]\n")
         return
+
+    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
+    console.print()
+    current_step += 1
 
     try:
         # Step 3: List tools
-        tools = await list_tools(client)
+        display_step(current_step, total_steps, "LISTING TOOLS", "in_progress")
 
-        print("\n✓ Successfully connected!")
-        print(f"✓ Server has {len(tools)} tools available")
-        print(f"\n{'=' * 70}\n")
+        try:
+            tools = await list_tools(client)
+        except Exception as e:
+            console.print(f"[bold red]  ❌ Failed to list tools: {type(e).__name__}[/bold red]")
+            console.print(f"  [dim]{str(e)}[/dim]\n")
+            console.print("[yellow]This may indicate:[/yellow]")
+            console.print("  • The MCP server is not properly configured")
+            console.print("  • The server endpoint URL is incorrect")
+            console.print("  • The server is returning errors for MCP requests")
+            return
+
+        display_step(current_step, total_steps, "LISTING TOOLS", "success", update=True)
+        console.print()
+        console.print(
+            f"[bold green]✓ Test complete![/bold green] Server has [bold cyan]{len(tools)}[/bold cyan] tools available"
+        )
+        console.print()
 
     finally:
-        await client.__aexit__(None, None, None)
+        try:
+            await client.__aexit__(None, None, None)
+        except Exception:
+            # Suppress session termination errors (these are harmless cleanup warnings)
+            pass
 
 
 async def interactive_session():
@@ -60,60 +94,82 @@ async def interactive_session():
     validate_config()
     setup_logging()
 
-    print(f"\n{'=' * 70}")
-    print("FORBIN - MCP REMOTE TOOL TESTER")
-    print(f"{'=' * 70}\n")
-    print(f"Server: {config.MCP_SERVER_URL}\n")
+    # Display logo and configuration
+    display_logo()
+    display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
+
+    # Determine total steps
+    total_steps = 3 if config.MCP_HEALTH_URL else 2
+    current_step = 1
 
     # Step 1: Wake up server if health URL is configured
     if config.MCP_HEALTH_URL:
-        # Note: In the original file, it checks the env var directly or passed arg?
-        # The refactored version uses config.MCP_HEALTH_URL
+        display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
         is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
 
         if not is_awake:
-            print("\n❌ Failed to wake up server after all attempts.")
+            console.print("[bold red]  ❌ Failed to wake up server after all attempts[/bold red]\n")
             return
 
+        display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+
         # Wait for MCP server to fully initialize
-        print("\nWaiting 20 seconds for MCP server to fully initialize...")
-        await asyncio.sleep(20)
-    else:
-        print("Note: No health URL configured - skipping wake-up")
+        with console.status(
+            "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
+        ):
+            await asyncio.sleep(20)
+
+        console.print()
+        current_step += 1
 
     # Step 2: Connect to MCP server
-    print(f"\n{'=' * 70}")
-    print("CONNECTING TO MCP SERVER")
-    print(f"{'=' * 70}")
-
+    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
     client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
 
     if not client:
-        print("\n❌ Failed to connect to MCP server")
+        console.print("[bold red]  ❌ Failed to connect to MCP server[/bold red]\n")
         return
+
+    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
+    console.print()
+    current_step += 1
 
     try:
         # Step 3: Get tools
-        tools = await list_tools(client)
+        display_step(current_step, total_steps, "LISTING TOOLS", "in_progress")
+
+        try:
+            tools = await list_tools(client)
+        except Exception as e:
+            console.print(f"[bold red]  ❌ Failed to list tools: {type(e).__name__}[/bold red]")
+            console.print(f"  [dim]{str(e)}[/dim]\n")
+            console.print("[yellow]This may indicate:[/yellow]")
+            console.print("  • The MCP server is not properly configured")
+            console.print("  • The server endpoint URL is incorrect")
+            console.print("  • The server is returning errors for MCP requests")
+            return
+
+        display_step(current_step, total_steps, "LISTING TOOLS", "success", update=True)
+        console.print()
 
         if not tools:
-            print("No tools available on this server.")
+            console.print("[yellow]No tools available on this server.[/yellow]")
             return
 
         # Main interaction loop
         while True:
             display_tools(tools)
 
-            print("Commands:")
-            print("  [number] - View tool details and call tool")
-            print("  'list'   - Show tools list again")
-            print("  'quit'   - Exit")
-            print()
+            console.print("[bold underline]Commands:[/bold underline]")
+            console.print("  [bold cyan]number[/bold cyan] - View tool details and call tool")
+            console.print("  [bold cyan]'list'[/bold cyan]   - Show tools list again")
+            console.print("  [bold cyan]'quit'[/bold cyan]   - Exit")
+            console.print()
 
-            choice = input("Enter choice: ").strip().lower()
+            choice = Prompt.ask("Enter choice").strip().lower()
 
             if choice in ("quit", "q", "exit"):
-                print("\nExiting...")
+                console.print("\n[bold yellow]Exiting...[/bold yellow]")
                 break
 
             if choice in ("list", "l", ""):
@@ -129,20 +185,25 @@ async def interactive_session():
                     display_tool_schema(selected_tool)
 
                     # Ask if user wants to call it
-                    call_choice = input("Call this tool? (y/n): ").strip().lower()
-
-                    if call_choice in ("y", "yes"):
+                    if Confirm.ask("Call this tool?"):
                         params = get_tool_parameters(selected_tool)
                         await call_tool(client, selected_tool, params)
 
-                    input("\nPress Enter to continue...")
+                    console.print("\n[dim]Press Enter to continue...[/dim]")
+                    input()
                 else:
-                    print(f"Invalid tool number. Choose between 1 and {len(tools)}\n")
+                    console.print(
+                        f"[red]Invalid tool number. Choose between 1 and {len(tools)}[/red]\n"
+                    )
             except ValueError:
-                print("Invalid choice. Enter a number, 'list', or 'quit'\n")
+                console.print("[red]Invalid choice. Enter a number, 'list', or 'quit'[/red]\n")
 
     finally:
-        await client.__aexit__(None, None, None)
+        try:
+            await client.__aexit__(None, None, None)
+        except Exception:
+            # Suppress session termination errors (these are harmless cleanup warnings)
+            pass
 
 
 async def main():
@@ -153,15 +214,14 @@ async def main():
             await test_connectivity()
             return
         elif sys.argv[1] in ("--help", "-h"):
-            print("Forbin - MCP Remote Tool Tester")
-            print("Inspired by Colossus: The Forbin Project")
-            print("\nUsage:")
-            print("  forbin           Run interactive session")
-            print("  forbin --test    Test connectivity only")
-            print("  forbin --help    Show this help message")
-            print("\nConfiguration:")
-            print("  Set MCP_SERVER_URL, MCP_TOKEN, and optionally MCP_HEALTH_URL")
-            print("  in a .env file (see .env.example)")
+            display_logo()
+            console.print("\n[bold]Usage:[/bold]")
+            console.print("  forbin           Run interactive session")
+            console.print("  forbin --test    Test connectivity only")
+            console.print("  forbin --help    Show this help message")
+            console.print("\n[bold]Configuration:[/bold]")
+            console.print("  Set MCP_SERVER_URL, MCP_TOKEN, and optionally MCP_HEALTH_URL")
+            console.print("  in a .env file (see .env.example)")
             return
 
     # Run interactive session by default

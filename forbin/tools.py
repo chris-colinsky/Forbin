@@ -2,6 +2,11 @@ import asyncio
 import json
 from typing import Any, Dict, List
 from fastmcp.client import Client
+from rich.prompt import Prompt
+from rich.panel import Panel
+from rich.syntax import Syntax
+
+from .display import console
 
 
 async def list_tools(client: Client) -> List[Any]:
@@ -14,9 +19,9 @@ async def list_tools(client: Client) -> List[Any]:
     Returns:
         List of tool objects
     """
-    print("\n  Retrieving tool manifest...")
-    tools = await asyncio.wait_for(client.list_tools(), timeout=15.0)
-    print(f"  ✓ Found {len(tools)} tools\n")
+    with console.status("  [dim]Retrieving tool manifest...[/dim]", spinner="dots"):
+        tools = await asyncio.wait_for(client.list_tools(), timeout=15.0)
+
     return tools
 
 
@@ -60,11 +65,9 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
     if not properties:
         return params
 
-    print(f"\n{'=' * 70}")
-    print("ENTER PARAMETERS")
-    print(f"{'=' * 70}\n")
-    print("Enter parameter values (press Enter to skip optional parameters)")
-    print()
+    console.print()
+    console.rule("[bold cyan]ENTER PARAMETERS[/bold cyan]")
+    console.print("Enter parameter values (press [bold]Enter[/bold] to skip optional parameters)\n")
 
     for param_name, param_info in properties.items():
         param_type = param_info.get("type", "string")
@@ -72,23 +75,26 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
         is_required = param_name in required
 
         # Show parameter info
-        req_str = "(required)" if is_required else "(optional)"
-        print(f"{param_name} ({param_type}) {req_str}")
+        req_str = "[red](required)[/red]" if is_required else "[green](optional)[/green]"
+        console.print(f"[bold cyan]{param_name}[/bold cyan] ({param_type}) {req_str}")
         if param_desc:
-            print(f"  {param_desc}")
+            console.print(f"  [dim]{param_desc}[/dim]")
 
         # Show enum values if present
         if "enum" in param_info:
-            print(f"  Allowed values: {', '.join(str(v) for v in param_info['enum'])}")
+            console.print(f"  Allowed values: {', '.join(str(v) for v in param_info['enum'])}")
 
         # Get value
         while True:
             try:
-                value_str = input("  → ").strip()
+                # We use generic Prompt and handle manual validation to support complex types and skipping
+                value_str = Prompt.ask("  →", default="", show_default=False)
 
                 if not value_str:
                     if is_required:
-                        print("  ❌ This parameter is required. Please enter a value.")
+                        console.print(
+                            "  [red]❌ This parameter is required. Please enter a value.[/red]"
+                        )
                         continue
                     else:
                         break
@@ -99,44 +105,87 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
                 break
 
             except (ValueError, json.JSONDecodeError) as e:
-                print(f"  ❌ Invalid value for type {param_type}: {e}")
-                print("  Please try again.")
+                console.print(f"  [red]❌ Invalid value for type {param_type}:[/red] {e}")
+                console.print("  Please try again.")
 
-        print()
+        console.print()
 
     return params
 
 
 async def call_tool(client: Client, tool: Any, params: Dict[str, Any]):
     """Call a tool with the given parameters."""
-    print(f"\n{'=' * 70}")
-    print("CALLING TOOL")
-    print(f"{'=' * 70}\n")
-    print(f"Tool: {tool.name}")
-    print(f"Parameters: {json.dumps(params, indent=2)}")
-    print("\nExecuting...\n")
+    console.print()
+    console.rule("[bold magenta]CALLING TOOL[/bold magenta]")
+    console.print(f"Tool: [bold]{tool.name}[/bold]")
+    console.print()
+
+    # Show parameters nicely
+    if params:
+        json_str = json.dumps(params, indent=2)
+        console.print(
+            Panel(
+                Syntax(json_str, "json", theme="monokai", line_numbers=False),
+                title="[bold]Parameters[/bold]",
+                title_align="left",
+                border_style="cyan",
+            )
+        )
+    else:
+        console.print("[dim]No parameters[/dim]")
+
+    console.print("\n[bold]Executing...[/bold]")
 
     try:
-        result = await client.call_tool(tool.name, params)
+        with console.status("Waiting for response...", spinner="dots"):
+            result = await client.call_tool(tool.name, params)
 
-        print("✓ Tool execution completed!\n")
-        print(f"{'=' * 70}")
-        print("RESULT")
-        print(f"{'=' * 70}\n")
+        console.print("\n[bold green]✓ Tool execution completed![/bold green]\n")
+        console.rule("[bold green]RESULT[/bold green]")
+        console.print()
 
         # Extract and display result
         if result.content:
             for item in result.content:
                 text = getattr(item, "text", None)
                 if text:
-                    print(text)
-                else:
-                    print(item)
-        else:
-            print("No content returned")
+                    # Try to detect if it looks like JSON for syntax highlighting
+                    text_stripped = text.strip()
+                    if text_stripped.startswith(("{", "[")) and text_stripped.endswith(("}", "]")):
+                        try:
+                            # Validate and pretty-print JSON
+                            parsed = json.loads(text_stripped)
+                            formatted = json.dumps(parsed, indent=2)
+                            console.print(
+                                Panel(
+                                    Syntax(formatted, "json", theme="monokai", line_numbers=False),
+                                    border_style="green",
+                                    title="[bold]Response[/bold]",
+                                    title_align="left",
+                                )
+                            )
+                            continue
+                        except json.JSONDecodeError:
+                            pass
 
-        print(f"\n{'=' * 70}\n")
+                    # For non-JSON text responses
+                    console.print(
+                        Panel(
+                            text.strip(),
+                            border_style="green",
+                            title="[bold]Response[/bold]",
+                            title_align="left",
+                        )
+                    )
+                else:
+                    console.print(str(item))
+        else:
+            console.print("[dim]No content returned[/dim]")
+
+        console.print()
+        console.rule()
+        console.print()
 
     except Exception as e:
-        print(f"❌ Tool execution failed: {type(e).__name__}")
-        print(f"   Error: {e}\n")
+        console.print(f"[bold red]❌ Tool execution failed:[/bold red] {type(e).__name__}")
+        console.print(f"   Error: {e}\n")
