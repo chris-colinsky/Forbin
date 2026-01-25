@@ -162,7 +162,7 @@ When modifying the tool:
 
 ### Important Constants
 
-- **Health check**: 6 attempts × 5 seconds = 30 seconds max
+- **Health check**: 6 attempts x 5 seconds = 30 seconds max
 - **Initialization wait**: 20 seconds after health check
 - **Connection retry**: 3 attempts with 30-second init timeout each
 - **Tool listing timeout**: 15 seconds

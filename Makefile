@@ -31,56 +31,56 @@ help: ## Show this help message
 install: ## Install production dependencies
 	@echo "$(GREEN)Installing dependencies...$(NC)"
 	uv sync --no-dev
-	@echo "$(GREEN)✓ Dependencies installed$(NC)"
+	@echo "$(GREEN)+ Dependencies installed$(NC)"
 
 install-dev: ## Install development dependencies
 	@echo "$(GREEN)Installing development dependencies...$(NC)"
 	uv sync
 	uv pip install pytest pytest-asyncio pytest-cov black ruff pre-commit
-	@echo "$(GREEN)✓ Development dependencies installed$(NC)"
+	@echo "$(GREEN)+ Development dependencies installed$(NC)"
 
 test: ## Run all tests
 	@echo "$(GREEN)Running all tests...$(NC)"
-	pytest tests/ -v
-	@echo "$(GREEN)✓ All tests passed$(NC)"
+	uv run pytest tests/ -v
+	@echo "$(GREEN)+ All tests passed$(NC)"
 
 test-unit: ## Run unit tests only
 	@echo "$(GREEN)Running unit tests...$(NC)"
-	pytest tests/ -v
-	@echo "$(GREEN)✓ Unit tests passed$(NC)"
+	uv run pytest tests/ -v
+	@echo "$(GREEN)+ Unit tests passed$(NC)"
 
 test-integration: ## Run integration tests only
 	@echo "$(GREEN)Running integration tests...$(NC)"
-	pytest tests/test_integration.py -v
-	@echo "$(GREEN)✓ Integration tests passed$(NC)"
+	uv run pytest tests/test_integration.py -v
+	@echo "$(GREEN)+ Integration tests passed$(NC)"
 
 test-coverage: ## Run tests with coverage report
 	@echo "$(GREEN)Running tests with coverage...$(NC)"
-	pytest tests/ --cov=. --cov-report=html --cov-report=term
-	@echo "$(GREEN)✓ Coverage report generated$(NC)"
+	uv run pytest tests/ --cov=. --cov-report=html --cov-report=term
+	@echo "$(GREEN)+ Coverage report generated$(NC)"
 	@echo "$(YELLOW)Open htmlcov/index.html to view detailed coverage$(NC)"
 
 test-watch: ## Run tests in watch mode
 	@echo "$(GREEN)Running tests in watch mode...$(NC)"
-	pytest-watch tests/ -v
+	uv run pytest-watch tests/ -v
 
 lint: ## Run linter (ruff)
 	@echo "$(GREEN)Running linter...$(NC)"
-	ruff check forbin tests/
-	@echo "$(GREEN)✓ Linting complete$(NC)"
+	uv run ruff check forbin tests/
+	@echo "$(GREEN)+ Linting complete$(NC)"
 
 format: ## Format code with black
 	@echo "$(GREEN)Formatting code...$(NC)"
-	black forbin tests/
-	@echo "$(GREEN)✓ Code formatted$(NC)"
+	uv run black forbin tests/
+	@echo "$(GREEN)+ Code formatted$(NC)"
 
 format-check: ## Check code formatting without making changes
 	@echo "$(GREEN)Checking code formatting...$(NC)"
-	black --check forbin tests/
-	@echo "$(GREEN)✓ Code formatting is correct$(NC)"
+	uv run black --check forbin tests/
+	@echo "$(GREEN)+ Code formatting is correct$(NC)"
 
 check: format-check lint test ## Run all checks (format, lint, test)
-	@echo "$(GREEN)✓ All checks passed!$(NC)"
+	@echo "$(GREEN)+ All checks passed!$(NC)"
 
 clean: ## Clean up generated files
 	@echo "$(GREEN)Cleaning up...$(NC)"
@@ -89,57 +89,57 @@ clean: ## Clean up generated files
 	find . -type f -name "*.pyo" -delete
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 	rm -rf build/ dist/ .pytest_cache/ htmlcov/ .coverage
-	@echo "$(GREEN)✓ Cleanup complete$(NC)"
+	@echo "$(GREEN)+ Cleanup complete$(NC)"
 
 run: ## Run the tool in interactive mode
 	@echo "$(GREEN)Starting Forbin...$(NC)"
-	python run_forbin.py
+	uv run python run_forbin.py
 
 run-test: ## Run the tool in connectivity test mode
 	@echo "$(GREEN)Running connectivity test...$(NC)"
-	python run_forbin.py --test
+	uv run python run_forbin.py --test
 
 run-help: ## Show tool help
-	python run_forbin.py --help
+	uv run python run_forbin.py --help
 
 pre-commit-install: ## Install pre-commit hooks
 	@echo "$(GREEN)Installing pre-commit hooks...$(NC)"
-	pre-commit install
-	@echo "$(GREEN)✓ Pre-commit hooks installed$(NC)"
+	uv run pre-commit install
+	@echo "$(GREEN)+ Pre-commit hooks installed$(NC)"
 
 pre-commit-run: ## Run pre-commit hooks manually
 	@echo "$(GREEN)Running pre-commit hooks...$(NC)"
-	pre-commit run --all-files
+	uv run pre-commit run --all-files
 
 validate: ## Validate Python syntax
 	@echo "$(GREEN)Validating Python syntax...$(NC)"
-	python -m py_compile forbin/*.py
-	python -m py_compile tests/*.py
-	@echo "$(GREEN)✓ Syntax is valid$(NC)"
+	uv run python -m py_compile forbin/*.py
+	uv run python -m py_compile tests/*.py
+	@echo "$(GREEN)+ Syntax is valid$(NC)"
 
 setup-env: ## Create .env file from example
 	@if [ ! -f .env ]; then \
 		echo "$(GREEN)Creating .env file from .env.example...$(NC)"; \
 		cp .env.example .env; \
-		echo "$(YELLOW)⚠ Please edit .env with your MCP server details$(NC)"; \
+		echo "$(YELLOW)! Please edit .env with your MCP server details$(NC)"; \
 	else \
 		echo "$(YELLOW).env file already exists$(NC)"; \
 	fi
 
 install-all: install-dev setup-env pre-commit-install ## Complete setup (install deps, create .env, setup hooks)
-	@echo "$(GREEN)✓ Complete setup finished!$(NC)"
+	@echo "$(GREEN)+ Complete setup finished!$(NC)"
 	@echo "$(YELLOW)Next steps:$(NC)"
 	@echo "  1. Edit .env with your MCP server details"
 	@echo "  2. Run 'make test' to verify setup"
 	@echo "  3. Run 'make run-test' to test connectivity"
 
 ci: lint format-check test ## Run CI checks (used by GitHub Actions)
-	@echo "$(GREEN)✓ CI checks passed!$(NC)"
+	@echo "$(GREEN)+ CI checks passed!$(NC)"
 
 # Development workflow targets
 dev-setup: install-all ## Alias for install-all
 
 quick-test: ## Quick test (no coverage)
-	@pytest tests/ -v --tb=short
+	@uv run pytest tests/ -v --tb=short
 
 watch: test-watch ## Alias for test-watch

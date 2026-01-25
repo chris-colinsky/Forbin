@@ -12,14 +12,17 @@ MCP_SERVER_URL: Optional[str] = os.getenv("MCP_SERVER_URL")
 MCP_HEALTH_URL: Optional[str] = os.getenv("MCP_HEALTH_URL")
 MCP_TOKEN: Optional[str] = os.getenv("MCP_TOKEN")
 
+# Runtime flags
+VERBOSE: bool = False
+
 
 def validate_config():
     """Validate required environment variables."""
     if not MCP_SERVER_URL:
-        print("❌ Error: MCP_SERVER_URL environment variable is required")
+        print("Error: MCP_SERVER_URL environment variable is required")
         print("Please create a .env file (see .env.example for template)")
         sys.exit(1)
     if not MCP_TOKEN:
-        print("❌ Error: MCP_TOKEN environment variable is required")
+        print("Error: MCP_TOKEN environment variable is required")
         print("Please create a .env file (see .env.example for template)")
         sys.exit(1)

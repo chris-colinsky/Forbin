@@ -224,15 +224,15 @@ make pre-commit-install
 ### What Gets Checked
 
 The hooks will:
-1. ✅ Trim trailing whitespace
-2. ✅ Fix end of file newlines
-3. ✅ Validate YAML, JSON, TOML syntax
-4. ✅ Check for large files
-5. ✅ Detect private keys
-6. ✅ Validate Python syntax
-7. ✅ Format code with Black
-8. ✅ Lint with Ruff
-9. ✅ Run full test suite
+1. [x] Trim trailing whitespace
+2. [x] Fix end of file newlines
+3. [x] Validate YAML, JSON, TOML syntax
+4. [x] Check for large files
+5. [x] Detect private keys
+6. [x] Validate Python syntax
+7. [x] Format code with Black
+8. [x] Lint with Ruff
+9. [x] Run full test suite
 
 ### Manual Execution
 

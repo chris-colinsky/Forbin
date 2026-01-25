@@ -5,7 +5,8 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich.syntax import Syntax
-from rich.control import Control, ControlType
+from rich.control import Control
+from rich.segment import ControlType
 
 # Global console instance with constrained width for better readability
 console = Console(width=100)
@@ -67,11 +68,11 @@ def display_step(
         status: One of 'in_progress', 'success', 'skip'
         update: If True, updates the previous line instead of creating a new one
     """
-    icons = {"in_progress": "⏳", "success": "✓", "skip": "⊝"}
+    icons = {"in_progress": ">", "success": "+", "skip": "-"}
 
     colors = {"in_progress": "yellow", "success": "green", "skip": "dim"}
 
-    icon = icons.get(status, "•")
+    icon = icons.get(status, "*")
     color = colors.get(status, "white")
 
     step_text = f"[{color}]{icon} Step {step_num}/{total_steps}:[/{color}] [bold {color}]{title}[/bold {color}]"
@@ -197,7 +198,7 @@ def display_tool_schema(tool: Any):
                 req_str = "[red](required)[/red]" if is_required else "[green](optional)[/green]"
 
                 param_text = Text()
-                param_text.append(f"\n• {param_name}", style="bold cyan")
+                param_text.append(f"\n- {param_name}", style="bold cyan")
                 param_text.append(f" ({param_type}) ", style="yellow")
                 param_text.append(req_str)
                 param_text.append(f"\n  {param_desc}")

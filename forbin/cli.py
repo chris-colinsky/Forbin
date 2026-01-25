@@ -5,7 +5,7 @@ from rich.prompt import Prompt, Confirm
 
 from . import config
 from .config import validate_config
-from .utils import setup_logging
+from .utils import setup_logging, listen_for_toggle
 from .client import connect_to_mcp_server, wake_up_server
 from .tools import list_tools, get_tool_parameters, call_tool
 from .display import (
@@ -33,7 +33,7 @@ async def test_connectivity():
         is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
 
         if not is_awake:
-            console.print("[bold red]  ❌ Failed to wake up server[/bold red]\n")
+            console.print("[bold red]  Failed to wake up server[/bold red]\n")
             return
 
         display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
@@ -52,7 +52,7 @@ async def test_connectivity():
     client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
 
     if not client:
-        console.print("[bold red]  ❌ Failed to connect to MCP server[/bold red]\n")
+        console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
         return
 
     display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
@@ -66,18 +66,18 @@ async def test_connectivity():
         try:
             tools = await list_tools(client)
         except Exception as e:
-            console.print(f"[bold red]  ❌ Failed to list tools: {type(e).__name__}[/bold red]")
+            console.print(f"[bold red]  Failed to list tools: {type(e).__name__}[/bold red]")
             console.print(f"  [dim]{str(e)}[/dim]\n")
             console.print("[yellow]This may indicate:[/yellow]")
-            console.print("  • The MCP server is not properly configured")
-            console.print("  • The server endpoint URL is incorrect")
-            console.print("  • The server is returning errors for MCP requests")
+            console.print("  - The MCP server is not properly configured")
+            console.print("  - The server endpoint URL is incorrect")
+            console.print("  - The server is returning errors for MCP requests")
             return
 
         display_step(current_step, total_steps, "LISTING TOOLS", "success", update=True)
         console.print()
         console.print(
-            f"[bold green]✓ Test complete![/bold green] Server has [bold cyan]{len(tools)}[/bold cyan] tools available"
+            f"[bold green]Test complete![/bold green] Server has [bold cyan]{len(tools)}[/bold cyan] tools available"
         )
         console.print()
 
@@ -108,7 +108,7 @@ async def interactive_session():
         is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
 
         if not is_awake:
-            console.print("[bold red]  ❌ Failed to wake up server after all attempts[/bold red]\n")
+            console.print("[bold red]  Failed to wake up server after all attempts[/bold red]\n")
             return
 
         display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
@@ -127,7 +127,7 @@ async def interactive_session():
     client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
 
     if not client:
-        console.print("[bold red]  ❌ Failed to connect to MCP server[/bold red]\n")
+        console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
         return
 
     display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
@@ -141,12 +141,12 @@ async def interactive_session():
         try:
             tools = await list_tools(client)
         except Exception as e:
-            console.print(f"[bold red]  ❌ Failed to list tools: {type(e).__name__}[/bold red]")
+            console.print(f"[bold red]  Failed to list tools: {type(e).__name__}[/bold red]")
             console.print(f"  [dim]{str(e)}[/dim]\n")
             console.print("[yellow]This may indicate:[/yellow]")
-            console.print("  • The MCP server is not properly configured")
-            console.print("  • The server endpoint URL is incorrect")
-            console.print("  • The server is returning errors for MCP requests")
+            console.print("  - The MCP server is not properly configured")
+            console.print("  - The server endpoint URL is incorrect")
+            console.print("  - The server is returning errors for MCP requests")
             return
 
         display_step(current_step, total_steps, "LISTING TOOLS", "success", update=True)
@@ -163,6 +163,11 @@ async def interactive_session():
             console.print("[bold underline]Commands:[/bold underline]")
             console.print("  [bold cyan]number[/bold cyan] - View tool details and call tool")
             console.print("  [bold cyan]'list'[/bold cyan]   - Show tools list again")
+            console.print(
+                "  [bold cyan]'v'[/bold cyan]      - Toggle verbose logging (current: {})".format(
+                    "[green]ON[/green]" if config.VERBOSE else "[red]OFF[/red]"
+                )
+            )
             console.print("  [bold cyan]'quit'[/bold cyan]   - Exit")
             console.print()
 
@@ -173,6 +178,14 @@ async def interactive_session():
                 break
 
             if choice in ("list", "l", ""):
+                continue
+
+            if choice == "v":
+                config.VERBOSE = not config.VERBOSE
+                status = (
+                    "[bold green]ON[/bold green]" if config.VERBOSE else "[bold red]OFF[/bold red]"
+                )
+                console.print(f"\n[bold cyan]Verbose logging toggled {status}[/bold cyan]\n")
                 continue
 
             # Try to parse as tool number
@@ -208,21 +221,36 @@ async def interactive_session():
 
 async def main():
     """Main entry point."""
-    # Check for command line arguments
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ("--test", "-t"):
-            await test_connectivity()
-            return
-        elif sys.argv[1] in ("--help", "-h"):
-            display_logo()
-            console.print("\n[bold]Usage:[/bold]")
-            console.print("  forbin           Run interactive session")
-            console.print("  forbin --test    Test connectivity only")
-            console.print("  forbin --help    Show this help message")
-            console.print("\n[bold]Configuration:[/bold]")
-            console.print("  Set MCP_SERVER_URL, MCP_TOKEN, and optionally MCP_HEALTH_URL")
-            console.print("  in a .env file (see .env.example)")
-            return
+    setup_logging()
 
-    # Run interactive session by default
-    await interactive_session()
+    # Start background listener for 'v' key toggle
+    listener_task = asyncio.create_task(listen_for_toggle())
+
+    try:
+        # Check for command line arguments
+        if len(sys.argv) > 1:
+            if sys.argv[1] in ("--test", "-t"):
+                await test_connectivity()
+                return
+            elif sys.argv[1] in ("--help", "-h"):
+                display_logo()
+                console.print("\n[bold]Usage:[/bold]")
+                console.print("  forbin           Run interactive session")
+                console.print("  forbin --test    Test connectivity only")
+                console.print("  forbin --help    Show this help message")
+                console.print("\n[bold]Configuration:[/bold]")
+                console.print("  Set MCP_SERVER_URL, MCP_TOKEN, and optionally MCP_HEALTH_URL")
+                console.print("  in a .env file (see .env.example)")
+                console.print("\n[bold]Interactive Shortcuts:[/bold]")
+                console.print("  [bold cyan]'v'[/bold cyan] - Toggle verbose logging at any time")
+                return
+
+        # Run interactive session by default
+        await interactive_session()
+    finally:
+        # Cancel the listener task when exiting
+        listener_task.cancel()
+        try:
+            await listener_task
+        except asyncio.CancelledError:
+            pass

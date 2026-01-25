@@ -161,11 +161,11 @@ ENTER PARAMETERS
 
 report_month (string) (required)
   Month in YYYY-MM format
-  � 2025-05
+  > 2025-05
 
 use_preview_db (boolean) (optional)
   Use preview database instead of production
-  � false
+  > false
 
 ======================================================================
 CALLING TOOL
@@ -218,9 +218,13 @@ Forbin is designed to handle the complexities of remote MCP servers, especially 
 
 During operation, Forbin shows its progress using colored step indicators:
 
-- **[yellow]⏳ Yellow[/yellow]**: **In Progress** - The current action is being performed.
-- **[green]✓ Green[/green]**: **Success** - The step completed successfully.
-- **[dim]⊝ Dim[/dim]**: **Skip** - Step was skipped (e.g., wake-up not needed).
+- **[yellow]> Yellow[/yellow]**: **In Progress** - The current action is being performed.
+- **[green]+ Green[/green]**: **Success** - The step completed successfully.
+- **[dim]- Dim[/dim]**: **Skip** - Step was skipped (e.g., wake-up not needed).
+
+### Interactive Toggle
+
+At any time during the connection process or while in the tool menu, you can press **`v`** to toggle verbose logging on or off. This is useful for debugging connection issues in real-time without restarting the tool.
 
 ### Detailed Documentation
 

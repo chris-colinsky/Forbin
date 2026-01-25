@@ -1,4 +1,7 @@
 import sys
+import asyncio
+import select
+from . import config
 
 
 # Suppress stderr warnings from MCP library (like "Session termination failed: 400")
@@ -25,6 +28,11 @@ class FilteredStderr:
         self.suppress_depth = 0
 
     def write(self, text):
+        # If verbose mode is ON, don't suppress anything
+        if config.VERBOSE:
+            self.original_stderr.write(text)
+            return
+
         # Check if this line starts a suppressible error block
         if any(pattern in text for pattern in self.suppress_patterns):
             self.suppressing = True
@@ -57,3 +65,47 @@ class FilteredStderr:
 def setup_logging():
     """Replace stderr with filtered version."""
     sys.stderr = FilteredStderr(sys.stderr)
+
+
+async def listen_for_toggle():
+    """
+    Background task to listen for 'v' key to toggle verbose logging.
+    Uses non-blocking stdin read.
+    """
+    # Only try to import termios/tty on Unix-like systems
+    try:
+        import termios
+        import tty
+    except ImportError:
+        return
+
+    fd = sys.stdin.fileno()
+    # Check if we are in a terminal
+    if not sys.stdin.isatty():
+        return
+
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while True:
+            # Non-blocking check for input
+            if select.select([sys.stdin], [], [], 0.1)[0]:
+                char = sys.stdin.read(1).lower()
+                if char == "v":
+                    config.VERBOSE = not config.VERBOSE
+                    from .display import console
+
+                    status = (
+                        "[bold green]ON[/bold green]"
+                        if config.VERBOSE
+                        else "[bold red]OFF[/bold red]"
+                    )
+                    # Clear current line and print toggle status
+                    console.print(f"\n[bold cyan]Verbose logging toggled {status}[/bold cyan]")
+
+            await asyncio.sleep(0.1)
+    except Exception:
+        # Silently fail if something goes wrong with the terminal settings
+        pass
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)

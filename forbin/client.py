@@ -37,10 +37,13 @@ async def wake_up_server(health_url: str, max_attempts: int = 6, wait_seconds: f
                             )
 
                 except (httpx.ConnectError, httpx.TimeoutException) as e:
-                    if attempt == max_attempts:
-                        console.print(f"  [yellow]Connection failed: {type(e).__name__}[/yellow]")
+                    if config.VERBOSE or attempt == max_attempts:
+                        error_msg = f"  [yellow]Connection failed: {type(e).__name__}[/yellow]"
+                        if config.VERBOSE:
+                            error_msg += f" [dim]({str(e)})[/dim]"
+                        console.print(error_msg)
                 except Exception as e:
-                    if attempt == max_attempts:
+                    if config.VERBOSE or attempt == max_attempts:
                         console.print(f"  [red]Unexpected error: {e}[/red]")
 
                 if attempt < max_attempts:
@@ -79,17 +82,24 @@ async def connect_to_mcp_server(max_attempts: int = 3, wait_seconds: float = 5) 
                 return client
 
             except asyncio.TimeoutError:
-                if attempt == max_attempts:
-                    console.print("  [red]✗ Timeout (server not responding)[/red]")
+                if config.VERBOSE or attempt == max_attempts:
+                    console.print("  [red]Timeout (server not responding)[/red]")
                 if attempt < max_attempts:
                     await asyncio.sleep(wait_seconds)
             except Exception as e:
                 error_name = type(e).__name__
-                if attempt == max_attempts:
+                if config.VERBOSE or attempt == max_attempts:
                     if "BrokenResourceError" in error_name or "ClosedResourceError" in error_name:
-                        console.print("  [yellow]✗ Connection error (server not ready)[/yellow]")
+                        console.print("  [yellow]Connection error (server not ready)[/yellow]")
                     else:
-                        console.print(f"  [red]✗ {error_name}: {e}[/red]")
+                        console.print(f"  [red]{error_name}: {e}[/red]")
+
+                    if config.VERBOSE and not (
+                        "BrokenResourceError" in error_name or "ClosedResourceError" in error_name
+                    ):
+                        import traceback
+
+                        console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
                 if attempt < max_attempts:
                     await asyncio.sleep(wait_seconds)

@@ -33,9 +33,17 @@ Throughout the connection and execution process, Forbin displays step indicators
 
 | Color | Icon | Meaning |
 |-------|------|---------|
-| **Yellow** | ⏳ | **In Progress** - The current action is being performed. |
-| **Green** | ✓ | **Success** - The step completed successfully. |
-| **Dim/Grey** | ⊝ | **Skip** - This step was skipped (e.g., wake-up skipped if no health URL). |
+| **Yellow** | > | **In Progress** - The current action is being performed. |
+| **Green** | + | **Success** - The step completed successfully. |
+| **Dim/Grey** | - | **Skip** - This step was skipped (e.g., wake-up skipped if no health URL). |
+
+### Anytime Logging Toggle
+
+Forbin includes a background listener that monitors for the **`v`** keypress.
+
+- **Non-blocking:** You can toggle logging even while Forbin is waiting for a health check or establishing a connection.
+- **Real-time unsuppression:** When logging is toggled **ON**, Forbin's `FilteredStderr` immediately stops suppressing typical MCP library warnings and errors, showing you full tracebacks and connection details.
+- **Visual Feedback:** A notification will appear in the CLI whenever the logging state changes.
 
 ### Interactive Tool Browser
 

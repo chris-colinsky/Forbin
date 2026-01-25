@@ -88,12 +88,12 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
         while True:
             try:
                 # We use generic Prompt and handle manual validation to support complex types and skipping
-                value_str = Prompt.ask("  →", default="", show_default=False)
+                value_str = Prompt.ask("  ->", default="", show_default=False)
 
                 if not value_str:
                     if is_required:
                         console.print(
-                            "  [red]❌ This parameter is required. Please enter a value.[/red]"
+                            "  [red]This parameter is required. Please enter a value.[/red]"
                         )
                         continue
                     else:
@@ -105,7 +105,7 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
                 break
 
             except (ValueError, json.JSONDecodeError) as e:
-                console.print(f"  [red]❌ Invalid value for type {param_type}:[/red] {e}")
+                console.print(f"  [red]Invalid value for type {param_type}:[/red] {e}")
                 console.print("  Please try again.")
 
         console.print()
@@ -140,7 +140,7 @@ async def call_tool(client: Client, tool: Any, params: Dict[str, Any]):
         with console.status("Waiting for response...", spinner="dots"):
             result = await client.call_tool(tool.name, params)
 
-        console.print("\n[bold green]✓ Tool execution completed![/bold green]\n")
+        console.print("\n[bold green]Tool execution completed![/bold green]\n")
         console.rule("[bold green]RESULT[/bold green]")
         console.print()
 
@@ -187,5 +187,5 @@ async def call_tool(client: Client, tool: Any, params: Dict[str, Any]):
         console.print()
 
     except Exception as e:
-        console.print(f"[bold red]❌ Tool execution failed:[/bold red] {type(e).__name__}")
+        console.print(f"[bold red]Tool execution failed:[/bold red] {type(e).__name__}")
         console.print(f"   Error: {e}\n")
