@@ -20,46 +20,48 @@ from .display import (
 
 async def test_connectivity():
     """Test connectivity to the MCP server."""
-    display_logo()
-    display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
+    # Start background listener for 'v' key toggle
+    listener_task = asyncio.create_task(listen_for_toggle())
+    try:
+        display_logo()
+        display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
 
-    # Determine total steps
-    total_steps = 3 if config.MCP_HEALTH_URL else 2
-    current_step = 1
+        # Determine total steps
+        total_steps = 3 if config.MCP_HEALTH_URL else 2
+        current_step = 1
 
-    # Step 1: Wake up server if health URL is configured
-    if config.MCP_HEALTH_URL:
-        display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
-        is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
+        # Step 1: Wake up server if health URL is configured
+        if config.MCP_HEALTH_URL:
+            display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
+            is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
 
-        if not is_awake:
-            console.print("[bold red]  Failed to wake up server[/bold red]\n")
+            if not is_awake:
+                console.print("[bold red]  Failed to wake up server[/bold red]\n")
+                return
+
+            display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+
+            # Wait for MCP server to fully initialize
+            with console.status(
+                "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
+            ):
+                await asyncio.sleep(20)
+
+            console.print()
+            current_step += 1
+
+        # Step 2: Connect to MCP server
+        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
+        client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
+
+        if not client:
+            console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
             return
 
-        display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
-
-        # Wait for MCP server to fully initialize
-        with console.status(
-            "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
-        ):
-            await asyncio.sleep(20)
-
+        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
         console.print()
         current_step += 1
 
-    # Step 2: Connect to MCP server
-    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
-    client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
-
-    if not client:
-        console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
-        return
-
-    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
-    console.print()
-    current_step += 1
-
-    try:
         # Step 3: List tools
         display_step(current_step, total_steps, "LISTING TOOLS", "in_progress")
 
@@ -82,6 +84,12 @@ async def test_connectivity():
         console.print()
 
     finally:
+        # Cancel the listener task when exiting
+        listener_task.cancel()
+        try:
+            await listener_task
+        except asyncio.CancelledError:
+            pass
         try:
             await client.__aexit__(None, None, None)
         except Exception:
@@ -94,47 +102,52 @@ async def interactive_session():
     validate_config()
     setup_logging()
 
-    # Display logo and configuration
-    display_logo()
-    display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
+    # Start background listener for 'v' key toggle during setup
+    listener_task = asyncio.create_task(listen_for_toggle())
 
-    # Determine total steps
-    total_steps = 3 if config.MCP_HEALTH_URL else 2
-    current_step = 1
+    try:
+        # Display logo and configuration
+        display_logo()
+        display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
 
-    # Step 1: Wake up server if health URL is configured
-    if config.MCP_HEALTH_URL:
-        display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
-        is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
+        # Determine total steps
+        total_steps = 3 if config.MCP_HEALTH_URL else 2
+        current_step = 1
 
-        if not is_awake:
-            console.print("[bold red]  Failed to wake up server after all attempts[/bold red]\n")
+        # Step 1: Wake up server if health URL is configured
+        if config.MCP_HEALTH_URL:
+            display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
+            is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
+
+            if not is_awake:
+                console.print(
+                    "[bold red]  Failed to wake up server after all attempts[/bold red]\n"
+                )
+                return
+
+            display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+
+            # Wait for MCP server to fully initialize
+            with console.status(
+                "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
+            ):
+                await asyncio.sleep(20)
+
+            console.print()
+            current_step += 1
+
+        # Step 2: Connect to MCP server
+        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
+        client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
+
+        if not client:
+            console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
             return
 
-        display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
-
-        # Wait for MCP server to fully initialize
-        with console.status(
-            "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
-        ):
-            await asyncio.sleep(20)
-
+        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
         console.print()
         current_step += 1
 
-    # Step 2: Connect to MCP server
-    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
-    client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
-
-    if not client:
-        console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
-        return
-
-    display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
-    console.print()
-    current_step += 1
-
-    try:
         # Step 3: Get tools
         display_step(current_step, total_steps, "LISTING TOOLS", "in_progress")
 
@@ -155,6 +168,14 @@ async def interactive_session():
         if not tools:
             console.print("[yellow]No tools available on this server.[/yellow]")
             return
+
+        # Stop background listener before entering interactive loop
+        # The interactive loop handles 'v' key itself
+        listener_task.cancel()
+        try:
+            await listener_task
+        except asyncio.CancelledError:
+            pass
 
         # Main interaction loop
         while True:
@@ -212,6 +233,14 @@ async def interactive_session():
                 console.print("[red]Invalid choice. Enter a number, 'list', or 'quit'[/red]\n")
 
     finally:
+        # Ensure listener is cancelled if we exit early
+        if not listener_task.done():
+            listener_task.cancel()
+            try:
+                await listener_task
+            except asyncio.CancelledError:
+                pass
+
         try:
             await client.__aexit__(None, None, None)
         except Exception:
@@ -222,9 +251,6 @@ async def interactive_session():
 async def main():
     """Main entry point."""
     setup_logging()
-
-    # Start background listener for 'v' key toggle
-    listener_task = asyncio.create_task(listen_for_toggle())
 
     try:
         # Check for command line arguments
@@ -247,10 +273,5 @@ async def main():
 
         # Run interactive session by default
         await interactive_session()
-    finally:
-        # Cancel the listener task when exiting
-        listener_task.cancel()
-        try:
-            await listener_task
-        except asyncio.CancelledError:
-            pass
+    except asyncio.CancelledError:
+        pass
