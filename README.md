@@ -1,4 +1,4 @@
-<p align="center">
+<p align="left">
   <img src="img/forbin_avatar.jpg" alt="Forbin Logo" width="200">
 </p>
 
