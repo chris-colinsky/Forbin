@@ -1,5 +1,5 @@
 [project]
-name = "forbin"
+name = "forbin-mcp"
 version = "0.1.0"
 description = "Interactive CLI tool for testing remote MCP servers - inspired by Colossus: The Forbin Project, where systems learn to communicate"
 readme = "README.md"
