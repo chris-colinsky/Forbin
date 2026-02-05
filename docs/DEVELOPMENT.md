@@ -26,20 +26,26 @@ make pre-commit-install # Set up git hooks
 
 ```
 forbin/
-├── forbin.py                      # Main CLI application
+├── forbin/                      # Main package
+│   ├── __init__.py
+│   ├── __main__.py             # Module entry point
+│   ├── cli.py                  # CLI application
+│   ├── client.py               # MCP connection logic
+│   ├── config.py               # Configuration
+│   ├── display.py              # UI logic
+│   ├── tools.py                # Tool handling
+│   └── utils.py                # Utilities
 ├── tests/                       # Test suite
 │   ├── __init__.py
 │   ├── conftest.py             # Pytest fixtures
-│   ├── test_forbin.py            # Unit tests
+│   ├── test_main.py            # Unit tests
 │   └── test_integration.py     # Integration tests
 ├── .github/
 │   └── workflows/
-│       ├── ci.yml              # CI/CD pipeline
-│       └── release.yml         # Release automation
+│       └── ci.yml              # CI/CD pipeline
 ├── pyproject.toml              # Python project configuration
 ├── Makefile                    # Development commands
 ├── .pre-commit-config.yaml     # Pre-commit hooks
-├── requirements.txt            # Pip dependencies
 ├── .env.example                # Example environment config
 ├── CLAUDE.md                   # AI assistant guidance
 ├── CONTRIBUTING.md             # Contribution guidelines
@@ -252,9 +258,7 @@ See `.pre-commit-config.yaml` for hook configuration.
 
 ### GitHub Actions Workflows
 
-We have two workflows:
-
-#### 1. CI Workflow (`.github/workflows/ci.yml`)
+#### CI Workflow (`.github/workflows/ci.yml`)
 
 Runs on every push and pull request:
 
@@ -263,14 +267,6 @@ Runs on every push and pull request:
 - **Validate Job** - Validates project structure
 - **Security Job** - Runs security scans
 - **Build Job** - Builds the package
-
-#### 2. Release Workflow (`.github/workflows/release.yml`)
-
-Runs on version tags (e.g., `v0.1.0`):
-
-- Builds the package
-- Publishes to PyPI
-- Creates GitHub release
 
 ### Running CI Locally
 
@@ -394,21 +390,32 @@ pytest tests/ --pdb
    git push origin main --tags
    ```
 
-5. **GitHub Actions** will automatically:
-   - Build the package
-   - Publish to PyPI (with `PYPI_API_TOKEN` secret)
-   - Create GitHub release
+5. **Publish to PyPI**:
+   ```bash
+   make publish
+   ```
 
 ### Test Release
 
 Test on TestPyPI first:
 
 ```bash
-# Manual workflow dispatch in GitHub Actions
-# Or locally:
-python -m build
-twine upload --repository testpypi dist/*
+make publish-test
 ```
+
+Then verify installation:
+```bash
+pip install -i https://test.pypi.org/simple/ forbin
+```
+
+### Homebrew Release
+
+After publishing to PyPI, update the Homebrew tap:
+
+1. Update the formula in `homebrew-forbin` repository
+2. Update the version and SHA256 hash
+3. Test locally with `brew install --build-from-source forbin`
+4. Push the updated formula
 
 ## Getting Help
 

@@ -111,91 +111,59 @@ MCP_TOKEN=prod-token-xyz
 Run the interactive tool browser:
 
 ```bash
-python -m forbin
+forbin
 ```
 
 This will:
 1. Wake up your server (if health URL is configured)
 2. Connect to the MCP server
 3. List all available tools
-4. Let you interactively explore and call tools
+4. Enter the two-level interactive browser
 
-**Example interaction:**
+**Tool List View:**
 ```
-======================================================================
-AVAILABLE TOOLS
-======================================================================
+Available Tools
 
-1. generate_report
-   Generates a monthly summary report from the database
-
-2. get_user_stats
-   Retrieves user statistics for a given time period
+   1. generate_report - Generates a monthly summary report...
+   2. get_user_stats - Retrieves user statistics for a given...
 
 Commands:
-  [number] - View tool details and call tool
-  'list'   - Show tools list again
-  'quit'   - Exit
+  number - Select a tool
+  v      - Toggle verbose logging (current: OFF)
+  q      - Quit
 
-Enter choice: 1
-
-======================================================================
-TOOL: generate_report
-======================================================================
-
-Description: Generates a monthly summary report from the database
-
-Parameters:
-
-  " report_month (string) (required)
-    Month in YYYY-MM format
-
-  " use_preview_db (boolean) (optional)
-    Use preview database instead of production
-
-Call this tool? (y/n): y
-
-======================================================================
-ENTER PARAMETERS
-======================================================================
-
-report_month (string) (required)
-  Month in YYYY-MM format
-  > 2025-05
-
-use_preview_db (boolean) (optional)
-  Use preview database instead of production
-  > false
-
-======================================================================
-CALLING TOOL
-======================================================================
-
-Tool: generate_report
-Parameters: {
-  "report_month": "2025-05",
-  "use_preview_db": false
-}
-
-Executing...
-
- Tool execution completed!
-
-======================================================================
-RESULT
-======================================================================
-
-Report generated successfully for May 2025
-Total records: 1,234
-...
+Select tool: 1
 ```
+
+**Tool View:**
+```
+─────────────────────────── generate_report ───────────────────────────
+
+Options:
+  d - View details
+  r - Run tool
+  b - Back to tool list
+  q - Quit
+
+Choose option:
+```
+
+From the tool view you can:
+- **d** - View full schema with syntax-highlighted JSON
+- **r** - Run the tool with interactive parameter input
+- **b** - Go back to the tool list
+- **q** - Quit
+
+After running a tool, you stay in the tool view to run again with different parameters or navigate elsewhere.
+
+For detailed usage instructions, see the [Usage Guide](docs/USAGE.md).
 
 ### Connectivity Test Mode
 
-Test server connectivity without running tools:
+Test server connectivity without entering interactive mode:
 
 ```bash
-python -m forbin --test
+forbin --test
 ```
 
 This is useful for:
@@ -207,7 +175,7 @@ This is useful for:
 ### Help
 
 ```bash
-python -m forbin --help
+forbin --help
 ```
 
 ## How It Works
@@ -235,7 +203,7 @@ For a deep dive into the wake-up process, connection retry logic, and technical 
 ### Project Structure
 
 ```
-mcp-remote-tool-tester/
+forbin/
  forbin/              # Package directory
    __init__.py
    __main__.py
@@ -245,7 +213,6 @@ mcp-remote-tool-tester/
    display.py         # UI logic
    tools.py           # Tool handling
    utils.py           # Utilities
- run_forbin.py        # Entry script
  pyproject.toml       # Python project configuration
  uv.lock              # Dependency lock file
  .env.example         # Example environment configuration

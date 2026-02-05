@@ -96,14 +96,14 @@ clean: ## Clean up generated files
 
 run: ## Run the tool in interactive mode
 	@echo "$(GREEN)Starting Forbin...$(NC)"
-	uv run python run_forbin.py
+	uv run python -m forbin
 
 run-test: ## Run the tool in connectivity test mode
 	@echo "$(GREEN)Running connectivity test...$(NC)"
-	uv run python run_forbin.py --test
+	uv run python -m forbin --test
 
 run-help: ## Show tool help
-	uv run python run_forbin.py --help
+	uv run python -m forbin --help
 
 pre-commit-install: ## Install pre-commit hooks
 	@echo "$(GREEN)Installing pre-commit hooks...$(NC)"
