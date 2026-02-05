@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="img/forbin_avatar.jpg" alt="Forbin Logo" width="200">
+</p>
+
 # Forbin
 
 [![CI](https://github.com/chris-colinsky/Forbin/actions/workflows/ci.yml/badge.svg?branch=release/v1.0.0)](https://github.com/chris-colinsky/Forbin/actions)
