@@ -1,0 +1,366 @@
+<p align="left">
+  <img src="img/forbin_avatar.jpg" alt="Forbin Logo" width="200">
+</p>
+
+[![CI](https://github.com/chris-colinsky/Forbin/actions/workflows/ci.yml/badge.svg?branch=release/v1.0.0)](https://github.com/chris-colinsky/Forbin/actions)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
+# Forbin
+
+> *"This is the voice of world control..."*
+> Inspired by **Colossus: The Forbin Project**, where two computers learn to communicate - just like MCP enables systems to talk to each other.
+
+An interactive CLI tool for testing remote MCP (Model Context Protocol) servers and their tools. Specifically designed for developing agentic workflows with support for suspended services (like Fly.io) that need automatic wake-up.
+
+## Name Origin
+
+**Forbin** is named after Dr. Charles Forbin from the 1970 film *Colossus: The Forbin Project*. In the movie, two supercomputers (American "Colossus" and Soviet "Guardian") learn to communicate with each other, establishing their own protocol and sharing information - a perfect parallel to the Model Context Protocol enabling AI systems and tools to communicate seamlessly.
+
+## Table of Contents
+
+- [Features](#features)
+- [Use Cases](#use-cases)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [How It Works](#how-it-works)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Features
+
+- **Interactive CLI** - Browse and test MCP tools with an intuitive command-line interface
+- **Automatic Wake-up** - Handles suspended services (Fly.io, etc.) with health check probing
+- **Cold-Start Resilient** - Built-in retry logic and extended timeouts for slow-starting servers
+- **Schema Inspection** - View detailed tool schemas including parameters and types
+- **Generic Tool Calling** - Test any MCP tool with interactive parameter input
+- **Type-Safe Parameter Parsing** - Automatic conversion of strings, booleans, numbers, and JSON objects
+- **Connectivity Testing** - Verify server connectivity without running tools
+
+## Use Cases
+
+- **Development** - Test your FastAPI/FastMCP server tools during development
+- **Debugging** - Verify tool schemas and responses in real-time
+- **Agentic Workflows** - Validate tools before integrating them into AI agents
+- **CI/CD** - Run connectivity tests as part of deployment pipelines
+- **Documentation** - Explore available tools on any MCP server
+
+## Installation
+
+### Prerequisites
+
+- Python 3.13 or higher
+- `uv` package manager (or pip)
+
+### Install with uv
+
+```bash
+# Clone the repository
+git clone https://github.com/chris-colinsky/Forbin.git
+cd Forbin
+
+# Install dependencies
+uv sync
+```
+
+### Install with pip
+
+```bash
+pip install -e .
+```
+
+## Configuration
+
+Create a `.env` file in the project root (copy from `.env.example`):
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your MCP server details:
+
+```env
+# Required: Your MCP server endpoint
+MCP_SERVER_URL=https://your-server.fly.dev/mcp
+
+# Required: Authentication token
+MCP_TOKEN=your-secret-token
+
+# Optional: Health check endpoint for suspended services
+MCP_HEALTH_URL=https://your-server.fly.dev/health
+```
+
+### Configuration Examples
+
+**Local Development:**
+```env
+MCP_SERVER_URL=http://localhost:8000/mcp
+MCP_TOKEN=test-token-123
+```
+
+**Fly.io Production:**
+```env
+MCP_SERVER_URL=https://my-app.fly.dev/mcp
+MCP_HEALTH_URL=https://my-app.fly.dev/health
+MCP_TOKEN=prod-token-xyz
+```
+
+## Usage
+
+### Interactive Mode (Default)
+
+Run the interactive tool browser:
+
+```bash
+forbin
+```
+
+This will:
+1. Wake up your server (if health URL is configured)
+2. Connect to the MCP server
+3. List all available tools
+4. Enter the two-level interactive browser
+
+**Tool List View:**
+```
+Available Tools
+
+   1. generate_report - Generates a monthly summary report...
+   2. get_user_stats - Retrieves user statistics for a given...
+
+Commands:
+  number - Select a tool
+  v      - Toggle verbose logging (current: OFF)
+  q      - Quit
+
+Select tool: 1
+```
+
+**Tool View:**
+```
+─────────────────────────── generate_report ───────────────────────────
+
+Options:
+  d - View details
+  r - Run tool
+  b - Back to tool list
+  q - Quit
+
+Choose option:
+```
+
+From the tool view you can:
+- **d** - View full schema with syntax-highlighted JSON
+- **r** - Run the tool with interactive parameter input
+- **b** - Go back to the tool list
+- **q** - Quit
+
+After running a tool, you stay in the tool view to run again with different parameters or navigate elsewhere.
+
+For detailed usage instructions, see the [Usage Guide](docs/USAGE.md).
+
+### Connectivity Test Mode
+
+Test server connectivity without entering interactive mode:
+
+```bash
+forbin --test
+```
+
+This is useful for:
+- Verifying server is reachable
+- Checking health endpoint configuration
+- Validating authentication tokens
+- CI/CD health checks
+
+### Help
+
+```bash
+forbin --help
+```
+
+## How It Works
+
+Forbin is designed to handle the complexities of remote MCP servers, especially those on serverless or suspended platforms.
+
+### Step Output Colors
+
+During operation, Forbin shows its progress using colored step indicators:
+
+- **[yellow]> Yellow[/yellow]**: **In Progress** - The current action is being performed.
+- **[green]+ Green[/green]**: **Success** - The step completed successfully.
+- **[dim]- Dim[/dim]**: **Skip** - Step was skipped (e.g., wake-up not needed).
+
+### Interactive Toggle
+
+At any time during the connection process or while in the tool menu, you can press **`v`** to toggle verbose logging on or off. This is useful for debugging connection issues in real-time without restarting the tool.
+
+### Detailed Documentation
+
+For a deep dive into the wake-up process, connection retry logic, and technical architecture, see [DOCS.md](DOCS.md).
+
+## Development
+
+### Project Structure
+
+```
+forbin/
+ forbin/              # Package directory
+   __init__.py
+   __main__.py
+   cli.py             # Main CLI application
+   client.py          # MCP connection logic
+   config.py          # Configuration
+   display.py         # UI logic
+   tools.py           # Tool handling
+   utils.py           # Utilities
+ pyproject.toml       # Python project configuration
+ uv.lock              # Dependency lock file
+ .env.example         # Example environment configuration
+ .env                 # Your environment configuration (not committed)
+ CLAUDE.md            # AI assistant guidance
+ README.md            # This file
+```
+
+### Dependencies
+
+- **fastmcp** - MCP client library for Python
+- **httpx** - Async HTTP client for health checks
+- **python-dotenv** - Environment variable management
+- **tenacity** - Retry logic utilities
+
+### Running Tests
+
+```bash
+# Test connectivity only
+python -m forbin --test
+
+# Run interactive session with your test server
+python -m forbin
+```
+
+## FastAPI/FastMCP Server Compatibility
+
+This tool is designed to work with FastAPI servers using the FastMCP library. Your server should:
+
+1. Expose an MCP endpoint (typically `/mcp`)
+2. Implement bearer token authentication
+3. Optionally expose a `/health` endpoint for wake-up detection
+4. Follow the MCP protocol specification
+
+**Example FastAPI/FastMCP server:**
+```python
+from fastapi import FastAPI
+from fastmcp import FastMCP
+
+app = FastAPI()
+mcp = FastMCP("My Tools")
+
+@mcp.tool()
+def my_tool(param: str) -> str:
+    """A sample tool"""
+    return f"Result: {param}"
+
+# Mount MCP at /mcp endpoint
+app.include_router(mcp.get_router(), prefix="/mcp")
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+```
+
+## Troubleshooting
+
+### "Failed to wake up server" or "Failed to list tools: TimeoutError"
+
+- Verify your `MCP_HEALTH_URL` is correct
+- Check if the health endpoint is accessible
+- Try removing `MCP_HEALTH_URL` if your server doesn't suspend
+- For `TimeoutError` during listing, check if your server is extremely slow or overloaded
+
+### "Connection error (server not ready)"
+
+- Increase the initialization wait time (edit `forbin/client.py`)
+- Check your `MCP_SERVER_URL` is correct
+- Verify your `MCP_TOKEN` is valid
+
+### "Session termination failed: 400"
+
+- This is a harmless error from the FastMCP library
+- Already suppressed in the tool output
+- Safe to ignore
+
+## Development
+
+For detailed development instructions, testing, and automation, see [DEVELOPMENT.md](DEVELOPMENT.md).
+
+**Quick commands:**
+
+```bash
+make install-dev      # Install dev dependencies
+make test             # Run tests
+make check            # Run all checks (format + lint + test)
+make help             # Show all available commands
+```
+
+**Testing:**
+
+We have comprehensive test coverage with unit and integration tests:
+
+```bash
+make test             # Run all tests
+make test-coverage    # Run with coverage report
+make lint             # Check code quality
+make format           # Format code
+```
+
+**Pre-commit hooks:**
+
+Automatically run checks before each commit:
+
+```bash
+make pre-commit-install
+```
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for complete details on testing, CI/CD, and contributing.
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+**Quick start:**
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Install dev dependencies (`make install-dev`)
+4. Make your changes and add tests
+5. Run checks (`make check`)
+6. Commit your changes (`git commit -m 'Add amazing feature'`)
+7. Push to the branch (`git push origin feature/amazing-feature`)
+8. Open a Pull Request
+
+All pull requests must:
+- Pass all tests (`make test`)
+- Pass linting (`make lint`)
+- Maintain or improve code coverage
+- Include appropriate documentation
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+## Acknowledgments
+
+- **Name inspiration**: [Colossus: The Forbin Project](https://en.wikipedia.org/wiki/Colossus:_The_Forbin_Project) (1970)
+- Built with [FastMCP](https://github.com/jlowin/fastmcp) - FastAPI integration for MCP
+- Developed for better MCP tool testing during agentic workflow development
+
+## Links
+
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/)
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)
+- [FastAPI Documentation](https://fastapi.tiangolo.com/)
