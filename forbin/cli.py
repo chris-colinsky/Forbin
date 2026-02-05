@@ -1,15 +1,17 @@
 import asyncio
 import sys
 
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Prompt
 
 from . import config
 from .config import validate_config
 from .utils import setup_logging, listen_for_toggle
-from .client import connect_to_mcp_server, wake_up_server
-from .tools import list_tools, get_tool_parameters, call_tool
+from .client import connect_and_list_tools, wake_up_server
+from .tools import get_tool_parameters, call_tool
 from .display import (
     display_tools,
+    display_tool_header,
+    display_tool_menu,
     display_tool_schema,
     display_logo,
     display_config_panel,
@@ -22,12 +24,13 @@ async def test_connectivity():
     """Test connectivity to the MCP server."""
     # Start background listener for 'v' key toggle
     listener_task = asyncio.create_task(listen_for_toggle())
+    mcp_session = None
     try:
         display_logo()
         display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
 
         # Determine total steps
-        total_steps = 3 if config.MCP_HEALTH_URL else 2
+        total_steps = 2 if config.MCP_HEALTH_URL else 1
         current_step = 1
 
         # Step 1: Wake up server if health URL is configured
@@ -41,42 +44,31 @@ async def test_connectivity():
 
             display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
 
-            # Wait for MCP server to fully initialize
+            # Wait for MCP server to initialize (shorter wait like working example)
             with console.status(
-                "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
+                "  [dim]Waiting for server initialization (5s)...[/dim]", spinner="dots"
             ):
-                await asyncio.sleep(20)
+                await asyncio.sleep(5)
 
             console.print()
             current_step += 1
 
-        # Step 2: Connect to MCP server
-        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
-        client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
+        # Step 2: Connect to MCP server AND list tools in one operation
+        # (This avoids session expiry between connect and list_tools)
+        display_step(current_step, total_steps, "CONNECTING AND LISTING TOOLS", "in_progress")
+        mcp_session, tools = await connect_and_list_tools(max_attempts=3, wait_seconds=5)
 
-        if not client:
+        if not mcp_session:
             console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
-            return
-
-        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
-        console.print()
-        current_step += 1
-
-        # Step 3: List tools
-        display_step(current_step, total_steps, "LISTING TOOLS", "in_progress")
-
-        try:
-            tools = await list_tools(client)
-        except Exception as e:
-            console.print(f"[bold red]  Failed to list tools: {type(e).__name__}[/bold red]")
-            console.print(f"  [dim]{str(e)}[/dim]\n")
             console.print("[yellow]This may indicate:[/yellow]")
             console.print("  - The MCP server is not properly configured")
             console.print("  - The server endpoint URL is incorrect")
             console.print("  - The server is returning errors for MCP requests")
             return
 
-        display_step(current_step, total_steps, "LISTING TOOLS", "success", update=True)
+        display_step(
+            current_step, total_steps, "CONNECTING AND LISTING TOOLS", "success", update=True
+        )
         console.print()
         console.print(
             f"[bold green]Test complete![/bold green] Server has [bold cyan]{len(tools)}[/bold cyan] tools available"
@@ -90,11 +82,9 @@ async def test_connectivity():
             await listener_task
         except asyncio.CancelledError:
             pass
-        try:
-            await client.__aexit__(None, None, None)
-        except Exception:
-            # Suppress session termination errors (these are harmless cleanup warnings)
-            pass
+        # Clean up MCP session
+        if mcp_session:
+            await mcp_session.cleanup()
 
 
 async def interactive_session():
@@ -104,6 +94,7 @@ async def interactive_session():
 
     # Start background listener for 'v' key toggle during setup
     listener_task = asyncio.create_task(listen_for_toggle())
+    mcp_session = None
 
     try:
         # Display logo and configuration
@@ -111,7 +102,7 @@ async def interactive_session():
         display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
 
         # Determine total steps
-        total_steps = 3 if config.MCP_HEALTH_URL else 2
+        total_steps = 2 if config.MCP_HEALTH_URL else 1
         current_step = 1
 
         # Step 1: Wake up server if health URL is configured
@@ -127,42 +118,31 @@ async def interactive_session():
 
             display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
 
-            # Wait for MCP server to fully initialize
+            # Wait for MCP server to initialize (shorter wait like working example)
             with console.status(
-                "  [dim]Waiting for server initialization (20s)...[/dim]", spinner="dots"
+                "  [dim]Waiting for server initialization (5s)...[/dim]", spinner="dots"
             ):
-                await asyncio.sleep(20)
+                await asyncio.sleep(5)
 
             console.print()
             current_step += 1
 
-        # Step 2: Connect to MCP server
-        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "in_progress")
-        client = await connect_to_mcp_server(max_attempts=3, wait_seconds=5)
+        # Step 2: Connect to MCP server AND list tools in one operation
+        # (This avoids session expiry between connect and list_tools)
+        display_step(current_step, total_steps, "CONNECTING AND LISTING TOOLS", "in_progress")
+        mcp_session, tools = await connect_and_list_tools(max_attempts=3, wait_seconds=5)
 
-        if not client:
+        if not mcp_session:
             console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
-            return
-
-        display_step(current_step, total_steps, "CONNECTING TO MCP SERVER", "success", update=True)
-        console.print()
-        current_step += 1
-
-        # Step 3: Get tools
-        display_step(current_step, total_steps, "LISTING TOOLS", "in_progress")
-
-        try:
-            tools = await list_tools(client)
-        except Exception as e:
-            console.print(f"[bold red]  Failed to list tools: {type(e).__name__}[/bold red]")
-            console.print(f"  [dim]{str(e)}[/dim]\n")
             console.print("[yellow]This may indicate:[/yellow]")
             console.print("  - The MCP server is not properly configured")
             console.print("  - The server endpoint URL is incorrect")
             console.print("  - The server is returning errors for MCP requests")
             return
 
-        display_step(current_step, total_steps, "LISTING TOOLS", "success", update=True)
+        display_step(
+            current_step, total_steps, "CONNECTING AND LISTING TOOLS", "success", update=True
+        )
         console.print()
 
         if not tools:
@@ -177,29 +157,26 @@ async def interactive_session():
         except asyncio.CancelledError:
             pass
 
-        # Main interaction loop
-        while True:
+        # Main interaction loop - Tool List View
+        running = True
+        while running:
             display_tools(tools)
 
             console.print("[bold underline]Commands:[/bold underline]")
-            console.print("  [bold cyan]number[/bold cyan] - View tool details and call tool")
-            console.print("  [bold cyan]'list'[/bold cyan]   - Show tools list again")
+            console.print("  [bold cyan]number[/bold cyan] - Select a tool")
             console.print(
-                "  [bold cyan]'v'[/bold cyan]      - Toggle verbose logging (current: {})".format(
+                "  [bold cyan]v[/bold cyan]      - Toggle verbose logging (current: {})".format(
                     "[green]ON[/green]" if config.VERBOSE else "[red]OFF[/red]"
                 )
             )
-            console.print("  [bold cyan]'quit'[/bold cyan]   - Exit")
+            console.print("  [bold cyan]q[/bold cyan]      - Quit")
             console.print()
 
-            choice = Prompt.ask("Enter choice").strip().lower()
+            choice = Prompt.ask("Select tool").strip().lower()
 
             if choice in ("quit", "q", "exit"):
                 console.print("\n[bold yellow]Exiting...[/bold yellow]")
                 break
-
-            if choice in ("list", "l", ""):
-                continue
 
             if choice == "v":
                 config.VERBOSE = not config.VERBOSE
@@ -215,22 +192,53 @@ async def interactive_session():
                 if 1 <= tool_num <= len(tools):
                     selected_tool = tools[tool_num - 1]
 
-                    # Show tool details
-                    display_tool_schema(selected_tool)
+                    # Enter Tool View loop
+                    while True:
+                        display_tool_header(selected_tool)
+                        display_tool_menu()
 
-                    # Ask if user wants to call it
-                    if Confirm.ask("Call this tool?"):
-                        params = get_tool_parameters(selected_tool)
-                        await call_tool(client, selected_tool, params)
+                        tool_choice = Prompt.ask("Choose option").strip().lower()
 
-                    console.print("\n[dim]Press Enter to continue...[/dim]")
-                    input()
+                        if tool_choice in ("d", "details", "1"):
+                            # View details
+                            display_tool_schema(selected_tool)
+
+                        elif tool_choice in ("r", "run", "2"):
+                            # Run tool
+                            params = get_tool_parameters(selected_tool)
+                            await call_tool(mcp_session, selected_tool, params)
+
+                        elif tool_choice in ("b", "back", "3"):
+                            # Back to tool list
+                            break
+
+                        elif tool_choice in ("q", "quit", "exit"):
+                            # Quit entirely
+                            console.print("\n[bold yellow]Exiting...[/bold yellow]")
+                            running = False
+                            break
+
+                        elif tool_choice == "v":
+                            config.VERBOSE = not config.VERBOSE
+                            status = (
+                                "[bold green]ON[/bold green]"
+                                if config.VERBOSE
+                                else "[bold red]OFF[/bold red]"
+                            )
+                            console.print(
+                                f"\n[bold cyan]Verbose logging toggled {status}[/bold cyan]\n"
+                            )
+
+                        else:
+                            console.print(
+                                "[red]Invalid option. Use 'd' for details, 'r' to run, 'b' to go back, or 'q' to quit.[/red]\n"
+                            )
                 else:
                     console.print(
                         f"[red]Invalid tool number. Choose between 1 and {len(tools)}[/red]\n"
                     )
             except ValueError:
-                console.print("[red]Invalid choice. Enter a number, 'list', or 'quit'[/red]\n")
+                console.print("[red]Invalid choice. Enter a tool number or 'q' to quit.[/red]\n")
 
     finally:
         # Ensure listener is cancelled if we exit early
@@ -241,15 +249,13 @@ async def interactive_session():
             except asyncio.CancelledError:
                 pass
 
-        try:
-            await client.__aexit__(None, None, None)
-        except Exception:
-            # Suppress session termination errors (these are harmless cleanup warnings)
-            pass
+        # Clean up MCP session
+        if mcp_session:
+            await mcp_session.cleanup()
 
 
-async def main():
-    """Main entry point."""
+async def async_main():
+    """Async main entry point."""
     setup_logging()
 
     try:
@@ -275,3 +281,8 @@ async def main():
         await interactive_session()
     except asyncio.CancelledError:
         pass
+
+
+def main():
+    """Synchronous entry point for CLI."""
+    asyncio.run(async_main())

@@ -77,7 +77,7 @@ class TestDisplayFunctions:
         """Test displaying tools list."""
         forbin.display.display_tools(mock_tool_list)
         captured = capsys.readouterr()
-        assert "AVAILABLE TOOLS" in captured.out
+        assert "Available Tools" in captured.out
         assert "test_tool" in captured.out
         assert "simple_tool" in captured.out
 
@@ -308,7 +308,7 @@ class TestMainFunction:
     async def test_main_help(self, capsys):
         """Test help flag."""
         with patch("sys.argv", ["forbin.py", "--help"]):
-            await forbin.cli.main()
+            await forbin.cli.async_main()
 
             captured = capsys.readouterr()
             assert "MCP Remote Tool Tester" in captured.out
@@ -326,7 +326,7 @@ class TestMainFunction:
             patch("forbin.client.Client", return_value=mock_mcp_client),
             patch("asyncio.sleep", new_callable=AsyncMock),
         ):
-            await forbin.cli.main()
+            await forbin.cli.async_main()
 
             # Should have attempted to wake up server and connect
             mock_httpx_client.get.assert_called()

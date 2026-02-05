@@ -1,26 +1,28 @@
 import asyncio
 import json
-from typing import Any, Dict, List
-from fastmcp.client import Client
+from typing import Any, Dict, List, TYPE_CHECKING
 from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.syntax import Syntax
 
 from .display import console
 
+if TYPE_CHECKING:
+    from .client import MCPSession
 
-async def list_tools(client: Client) -> List[Any]:
+
+async def list_tools(mcp_session: "MCPSession") -> List[Any]:
     """
     List all available tools from the MCP server.
 
     Args:
-        client: Connected MCP client
+        mcp_session: Connected MCPSession
 
     Returns:
         List of tool objects
     """
     with console.status("  [dim]Retrieving tool manifest...[/dim]", spinner="dots"):
-        tools = await asyncio.wait_for(client.list_tools(), timeout=15.0)
+        tools = await asyncio.wait_for(mcp_session.list_tools(), timeout=15.0)
 
     return tools
 
@@ -113,7 +115,7 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
     return params
 
 
-async def call_tool(client: Client, tool: Any, params: Dict[str, Any]):
+async def call_tool(mcp_session: "MCPSession", tool: Any, params: Dict[str, Any]):
     """Call a tool with the given parameters."""
     console.print()
     console.rule("[bold magenta]CALLING TOOL[/bold magenta]")
@@ -138,7 +140,7 @@ async def call_tool(client: Client, tool: Any, params: Dict[str, Any]):
 
     try:
         with console.status("Waiting for response...", spinner="dots"):
-            result = await client.call_tool(tool.name, params)
+            result = await mcp_session.call_tool(tool.name, params)
 
         console.print("\n[bold green]Tool execution completed![/bold green]\n")
         console.rule("[bold green]RESULT[/bold green]")

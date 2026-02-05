@@ -30,7 +30,6 @@ def display_logo():
 
 def display_config_panel(server_url: Optional[str], health_url: Optional[str] = None):
     """Display configuration information in a panel."""
-    from rich.table import Table
 
     config_table = Table.grid(padding=(0, 2))
     config_table.add_column(style="bold cyan", justify="right")
@@ -86,7 +85,7 @@ def display_step(
 
 
 def display_tools(tools: List[Any]):
-    """Display all available tools in a formatted table."""
+    """Display a compact list of available tools."""
     if not tools:
         console.print(
             Panel(
@@ -95,21 +94,19 @@ def display_tools(tools: List[Any]):
         )
         return
 
-    table = Table(title="AVAILABLE TOOLS", show_header=True, header_style="bold magenta")
-    table.add_column("#", style="dim", width=4)
-    table.add_column("Name", style="cyan", no_wrap=True)
-    table.add_column("Description")
+    console.print()
+    console.print("[bold underline]Available Tools[/bold underline]")
+    console.print()
 
     for i, tool in enumerate(tools, 1):
         description = tool.description.strip() if tool.description else "No description"
+        # Truncate long descriptions for compact display
+        if len(description) > 60:
+            description = description[:57] + "..."
+        console.print(
+            f"  [bold cyan]{i:2}[/bold cyan]. [white]{tool.name}[/white] [dim]- {description}[/dim]"
+        )
 
-        # Check if description contains JSON and highlight it
-        description_display = _highlight_json_in_text(description)
-
-        table.add_row(str(i), tool.name, description_display)
-
-    console.print()
-    console.print(table)
     console.print()
 
 
@@ -175,45 +172,78 @@ def _highlight_json_in_text(text: str):
     return result if len(result) > 0 else text
 
 
-def display_tool_schema(tool: Any):
-    """Display detailed schema for a specific tool."""
+def display_tool_header(tool: Any):
+    """Display a simple header for the tool view."""
+    console.print()
+    console.rule(f"[bold cyan]{tool.name}[/bold cyan]")
+    console.print()
+
+
+def display_tool_menu():
+    """Display the tool view menu options."""
+    console.print("[bold underline]Options:[/bold underline]")
+    console.print("  [bold cyan]d[/bold cyan] - View details")
+    console.print("  [bold cyan]r[/bold cyan] - Run tool")
+    console.print("  [bold cyan]b[/bold cyan] - Back to tool list")
+    console.print("  [bold cyan]q[/bold cyan] - Quit")
+    console.print()
+
+
+def _parse_description_with_code_blocks(description: str) -> List[Any]:
+    """Parse description and extract code blocks for syntax highlighting."""
+    import re
 
     content: List[Any] = []
 
+    # Pattern to match ```json ... ``` or ``` ... ``` code blocks
+    code_block_pattern = r"```(\w*)\n(.*?)```"
+
+    last_end = 0
+    for match in re.finditer(code_block_pattern, description, re.DOTALL):
+        # Add text before the code block
+        before_text = description[last_end : match.start()].strip()
+        if before_text:
+            content.append(Text(before_text))
+            content.append(Text(""))
+
+        # Get language and code
+        lang = match.group(1) or "json"
+        code = match.group(2).strip()
+
+        # Add syntax-highlighted code block
+        content.append(Syntax(code, lang, theme="monokai", line_numbers=False))
+        content.append(Text(""))
+
+        last_end = match.end()
+
+    # Add any remaining text after the last code block
+    remaining = description[last_end:].strip()
+    if remaining:
+        content.append(Text(remaining))
+
+    return content
+
+
+def display_tool_schema(tool: Any):
+    """Display detailed schema for a specific tool with syntax-highlighted JSON."""
+
+    content: List[Any] = []
+
+    # Description with parsed code blocks
     if tool.description:
-        content.append(Text(f"{tool.description}\n", style="italic"))
+        parsed_content = _parse_description_with_code_blocks(tool.description)
+        content.extend(parsed_content)
+        if parsed_content:
+            content.append(Text(""))
 
+    # Input Schema as syntax-highlighted JSON
     if tool.inputSchema:
-        schema = tool.inputSchema
-        if isinstance(schema, dict) and "properties" in schema:
-            content.append(Text("\nParameters:", style="bold underline"))
-            properties = schema.get("properties", {})
-            required = schema.get("required", [])
-
-            for param_name, param_info in properties.items():
-                param_type = param_info.get("type", "unknown")
-                param_desc = param_info.get("description", "No description")
-                is_required = param_name in required
-
-                req_str = "[red](required)[/red]" if is_required else "[green](optional)[/green]"
-
-                param_text = Text()
-                param_text.append(f"\n- {param_name}", style="bold cyan")
-                param_text.append(f" ({param_type}) ", style="yellow")
-                param_text.append(req_str)
-                param_text.append(f"\n  {param_desc}")
-
-                content.append(param_text)
-
-                if "enum" in param_info:
-                    enum_vals = ", ".join(str(v) for v in param_info["enum"])
-                    content.append(Text(f"    Allowed values: {enum_vals}", style="dim"))
-        else:
-            content.append(Text("\nSchema:", style="bold underline"))
-            json_str = json.dumps(schema, indent=2)
-            content.append(Syntax(json_str, "json", theme="monokai", line_numbers=False))
+        content.append(Text("Input Schema:", style="bold underline"))
+        content.append(Text(""))
+        json_str = json.dumps(tool.inputSchema, indent=2)
+        content.append(Syntax(json_str, "json", theme="monokai", line_numbers=False))
     else:
-        content.append(Text("\nNo input parameters required.", style="dim"))
+        content.append(Text("No input parameters required.", style="dim"))
 
     # Combine all content
     panel_content = Group(*content)
@@ -222,8 +252,7 @@ def display_tool_schema(tool: Any):
     console.print(
         Panel(
             panel_content,
-            title=f"Tool: [bold]{tool.name}[/bold]",
-            subtitle="[dim]Press Enter to continue[/dim]",
+            title=f"[bold]{tool.name}[/bold] - Details",
             border_style="blue",
             expand=False,
         )
