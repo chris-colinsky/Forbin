@@ -1,5 +1,5 @@
 <p align="left">
-  <img src="img/forbin_avatar.jpg" alt="Forbin Logo" width="200">
+  <img src="https://raw.githubusercontent.com/chris-colinsky/Forbin/main/img/forbin_avatar.jpg" alt="Forbin Logo" width="200">
 </p>
 
 [![CI](https://github.com/chris-colinsky/Forbin/actions/workflows/ci.yml/badge.svg?branch=release/v1.0.0)](https://github.com/chris-colinsky/Forbin/actions)
