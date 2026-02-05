@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-unit test-integration test-coverage lint format check clean run run-test pre-commit-install
+.PHONY: help install install-dev test test-unit test-integration test-coverage lint format check clean run run-test pre-commit-install build publish publish-test
 
 # Default target
 .DEFAULT_GOAL := help
@@ -24,6 +24,9 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(GREEN)Running:$(NC)"
 	@grep -E '^run.*:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  $(BLUE)%-20s$(NC) %s\n", $$1, $$2}'
+	@echo ""
+	@echo "$(GREEN)Publishing:$(NC)"
+	@grep -E '^(build|publish).*:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  $(BLUE)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo "$(GREEN)Utilities:$(NC)"
 	@grep -E '^(clean|pre-commit-install):.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  $(BLUE)%-20s$(NC) %s\n", $$1, $$2}'
@@ -143,3 +146,23 @@ quick-test: ## Quick test (no coverage)
 	@uv run pytest tests/ -v --tb=short
 
 watch: test-watch ## Alias for test-watch
+
+# Build and publish targets
+build: clean ## Build distribution packages
+	@echo "$(GREEN)Building distribution packages...$(NC)"
+	uv build
+	@echo "$(GREEN)+ Build complete$(NC)"
+	@echo "$(YELLOW)Packages in dist/:$(NC)"
+	@ls -la dist/
+
+publish-test: build ## Publish to TestPyPI
+	@echo "$(GREEN)Publishing to TestPyPI...$(NC)"
+	uv publish --publish-url https://test.pypi.org/legacy/
+	@echo "$(GREEN)+ Published to TestPyPI$(NC)"
+	@echo "$(YELLOW)Test with: pip install -i https://test.pypi.org/simple/ forbin$(NC)"
+
+publish: build ## Publish to PyPI
+	@echo "$(GREEN)Publishing to PyPI...$(NC)"
+	uv publish
+	@echo "$(GREEN)+ Published to PyPI$(NC)"
+	@echo "$(YELLOW)Install with: pip install forbin$(NC)"
