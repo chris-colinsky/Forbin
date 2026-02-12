@@ -1,11 +1,14 @@
 import asyncio
 import json
+import sys
+import time
 from typing import Any, Dict, List, TYPE_CHECKING
 from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.syntax import Syntax
 
 from .display import console
+from .verbose import vlog_json, vlog_timing
 
 if TYPE_CHECKING:
     from .client import MCPSession
@@ -115,12 +118,45 @@ def get_tool_parameters(tool: Any) -> Dict[str, Any]:
     return params
 
 
+async def _wait_for_escape():
+    """Listen for ESC key press in the background. Returns when ESC is detected."""
+    try:
+        import termios
+        import tty
+        import select
+    except ImportError:
+        # Not available on this platform; wait forever (tool call will finish first)
+        await asyncio.Event().wait()
+        return
+
+    fd = sys.stdin.fileno()
+    if not sys.stdin.isatty():
+        await asyncio.Event().wait()
+        return
+
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setcbreak(fd)
+        while True:
+            if select.select([sys.stdin], [], [], 0.1)[0]:
+                char = sys.stdin.read(1)
+                if char == "\x1b":  # ESC key
+                    return
+            await asyncio.sleep(0.1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
 async def call_tool(mcp_session: "MCPSession", tool: Any, params: Dict[str, Any]):
     """Call a tool with the given parameters."""
     console.print()
     console.rule("[bold magenta]CALLING TOOL[/bold magenta]")
     console.print(f"Tool: [bold]{tool.name}[/bold]")
     console.print()
+
+    # Verbose: show input schema
+    if tool.inputSchema:
+        vlog_json("Tool Input Schema", tool.inputSchema)
 
     # Show parameters nicely
     if params:
@@ -136,11 +172,32 @@ async def call_tool(mcp_session: "MCPSession", tool: Any, params: Dict[str, Any]
     else:
         console.print("[dim]No parameters[/dim]")
 
-    console.print("\n[bold]Executing...[/bold]")
+    console.print("\n[bold]Executing...[/bold] [dim](press ESC to cancel)[/dim]")
 
     try:
+        call_start = time.monotonic()
+        tool_task = asyncio.create_task(mcp_session.call_tool(tool.name, params))
+        esc_task = asyncio.create_task(_wait_for_escape())
+
         with console.status("Waiting for response...", spinner="dots"):
-            result = await mcp_session.call_tool(tool.name, params)
+            done, pending = await asyncio.wait(
+                {tool_task, esc_task},
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        if esc_task in done:
+            console.print("\n[bold yellow]Cancelled by user[/bold yellow]\n")
+            return
+
+        result = tool_task.result()
+        vlog_timing("Full round-trip", time.monotonic() - call_start)
 
         console.print("\n[bold green]Tool execution completed![/bold green]\n")
         console.rule("[bold green]RESULT[/bold green]")

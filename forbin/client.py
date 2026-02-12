@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Optional
 import httpx
 from fastmcp.client import Client
@@ -6,6 +7,7 @@ from fastmcp.client.auth import BearerAuth
 
 from . import config
 from .display import console
+from .verbose import vlog, vlog_json, vlog_timing, vtimer
 
 
 class MCPSession:
@@ -17,11 +19,28 @@ class MCPSession:
 
     async def list_tools(self):
         """List available tools from the MCP server."""
-        return await self.session.list_tools()
+        vlog("Requesting tool list...")
+        async with vtimer("list_tools"):
+            tools = await self.session.list_tools()
+        vlog(f"Received [bold cyan]{len(tools)}[/bold cyan] tools")
+        return tools
 
     async def call_tool(self, name: str, arguments: dict):
         """Call a tool with the given arguments."""
-        return await self.session.call_tool(name, arguments)
+        vlog(f"MCP call_tool: [bold]{name}[/bold]")
+        vlog_json("Request Arguments", arguments)
+        async with vtimer("Tool execution time"):
+            result = await self.session.call_tool(name, arguments)
+        vlog(
+            f"Response: is_error={result.is_error}, "
+            f"content_blocks={len(result.content) if result.content else 0}"
+        )
+        if config.VERBOSE and result.content:
+            for i, block in enumerate(result.content):
+                text = getattr(block, "text", None)
+                if text:
+                    vlog_json(f"Raw Response Block {i}", text)
+        return result
 
     async def cleanup(self):
         """Close the MCP session."""
@@ -46,14 +65,25 @@ async def wake_up_server(health_url: str, max_attempts: int = 6, wait_seconds: f
     Returns:
         True if server is awake, False otherwise
     """
+    vlog(f"Wake-up target: [bold]{health_url}[/bold]")
+    wake_start = time.monotonic()
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         with console.status("  [dim]Polling health endpoint...[/dim]", spinner="dots") as status:
             for attempt in range(1, max_attempts + 1):
                 try:
                     status.update(f"  [dim]Attempt {attempt}/{max_attempts}...[/dim]")
+                    attempt_start = time.monotonic()
                     response = await client.get(health_url)
+                    attempt_elapsed = time.monotonic() - attempt_start
+
+                    vlog(
+                        f"Attempt {attempt}/{max_attempts}: "
+                        f"HTTP {response.status_code} ({attempt_elapsed * 1000:.0f}ms)"
+                    )
 
                     if response.status_code == 200:
+                        vlog_timing("Total wake-up time", time.monotonic() - wake_start)
                         return True
                     else:
                         if attempt == max_attempts:
@@ -62,18 +92,21 @@ async def wake_up_server(health_url: str, max_attempts: int = 6, wait_seconds: f
                             )
 
                 except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    vlog(f"Attempt {attempt}/{max_attempts}: {type(e).__name__}")
                     if config.VERBOSE or attempt == max_attempts:
                         error_msg = f"  [yellow]Connection failed: {type(e).__name__}[/yellow]"
                         if config.VERBOSE:
                             error_msg += f" [dim]({str(e)})[/dim]"
                         console.print(error_msg)
                 except Exception as e:
+                    vlog(f"Attempt {attempt}/{max_attempts}: {type(e).__name__}: {e}")
                     if config.VERBOSE or attempt == max_attempts:
                         console.print(f"  [red]Unexpected error: {e}[/red]")
 
                 if attempt < max_attempts:
                     await asyncio.sleep(wait_seconds)
 
+    vlog_timing("Total wake-up time (failed)", time.monotonic() - wake_start)
     return False
 
 
@@ -93,11 +126,14 @@ async def connect_to_mcp_server(
     server_url = config.MCP_SERVER_URL or ""
     token = config.MCP_TOKEN or ""
 
+    vlog(f"Connecting to: [bold]{server_url}[/bold]")
+
     with console.status("  [dim]Establishing connection...[/dim]", spinner="dots") as status:
         for attempt in range(1, max_attempts + 1):
             client = None
             try:
                 status.update(f"  [dim]Attempt {attempt}/{max_attempts}...[/dim]")
+                attempt_start = time.monotonic()
 
                 client = Client(
                     server_url,
@@ -108,9 +144,12 @@ async def connect_to_mcp_server(
 
                 # Enter the client context and capture the session
                 session = await client.__aenter__()
+
+                vlog_timing(f"Connection attempt {attempt}", time.monotonic() - attempt_start)
                 return MCPSession(client, session)
 
             except asyncio.TimeoutError:
+                vlog(f"Attempt {attempt}/{max_attempts}: Timeout")
                 if config.VERBOSE or attempt == max_attempts:
                     console.print("  [red]Timeout (server not responding)[/red]")
                 # Clean up partial connection
@@ -123,6 +162,7 @@ async def connect_to_mcp_server(
                     await asyncio.sleep(wait_seconds)
             except Exception as e:
                 error_name = type(e).__name__
+                vlog(f"Attempt {attempt}/{max_attempts}: {error_name}: {e}")
                 if config.VERBOSE or attempt == max_attempts:
                     if "BrokenResourceError" in error_name or "ClosedResourceError" in error_name:
                         console.print("  [yellow]Connection error (server not ready)[/yellow]")
@@ -168,11 +208,15 @@ async def connect_and_list_tools(
     server_url = config.MCP_SERVER_URL or ""
     token = config.MCP_TOKEN or ""
 
+    vlog(f"Connecting to: [bold]{server_url}[/bold]")
+    total_start = time.monotonic()
+
     with console.status("  [dim]Establishing connection...[/dim]", spinner="dots") as status:
         for attempt in range(1, max_attempts + 1):
             client = None
             try:
                 status.update(f"  [dim]Attempt {attempt}/{max_attempts}...[/dim]")
+                attempt_start = time.monotonic()
 
                 client = Client(
                     server_url,
@@ -185,15 +229,22 @@ async def connect_and_list_tools(
                 session = await client.__aenter__()
                 mcp_session = MCPSession(client, session)
 
+                vlog_timing(f"Connection attempt {attempt}", time.monotonic() - attempt_start)
+
                 # Immediately list tools while session is fresh
                 status.update(
                     f"  [dim]Retrieving tools (attempt {attempt}/{max_attempts})...[/dim]"
                 )
-                tools = await asyncio.wait_for(mcp_session.list_tools(), timeout=15.0)
+                list_start = time.monotonic()
+                tools = await asyncio.wait_for(mcp_session.session.list_tools(), timeout=15.0)
+                vlog_timing("Tool listing", time.monotonic() - list_start)
+                vlog(f"Received [bold cyan]{len(tools)}[/bold cyan] tools")
+                vlog_timing("Total connect+list", time.monotonic() - total_start)
 
                 return mcp_session, tools
 
             except asyncio.TimeoutError:
+                vlog(f"Attempt {attempt}/{max_attempts}: Timeout")
                 if config.VERBOSE or attempt == max_attempts:
                     console.print("  [red]Timeout (server not responding)[/red]")
                 # Clean up partial connection
@@ -206,6 +257,7 @@ async def connect_and_list_tools(
                     await asyncio.sleep(wait_seconds)
             except Exception as e:
                 error_name = type(e).__name__
+                vlog(f"Attempt {attempt}/{max_attempts}: {error_name}: {e}")
                 if config.VERBOSE or attempt == max_attempts:
                     if "BrokenResourceError" in error_name or "ClosedResourceError" in error_name:
                         console.print("  [yellow]Connection error (server not ready)[/yellow]")

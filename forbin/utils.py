@@ -1,5 +1,6 @@
 import sys
 import asyncio
+import logging
 import select
 from . import config
 
@@ -62,9 +63,61 @@ class FilteredStderr:
         self.original_stderr.flush()
 
 
+class _VerboseLogHandler(logging.Handler):
+    """Logging handler that routes messages through vlog() when verbose is on."""
+
+    def __init__(self, prefix: str):
+        super().__init__()
+        self.prefix = prefix
+
+    def emit(self, record):
+        if not config.VERBOSE:
+            return
+        try:
+            from .verbose import vlog
+
+            msg = self.format(record)
+            # Truncate very long messages
+            if len(msg) > 500:
+                msg = msg[:497] + "..."
+            vlog(f"[dim]\\[{self.prefix}][/dim] {msg}")
+        except Exception:
+            pass
+
+
+_logging_setup = False
+
+
 def setup_logging():
-    """Replace stderr with filtered version."""
+    """Replace stderr with filtered version and suppress noisy MCP library logging."""
+    global _logging_setup
+    if _logging_setup:
+        return
+    _logging_setup = True
+
     sys.stderr = FilteredStderr(sys.stderr)
+
+    # The MCP library's logging handlers may hold a reference to the original stderr
+    # (captured at import time), bypassing FilteredStderr. Suppress the noisy
+    # "Error in post_writer" 400 errors directly via the logging system.
+    class _MCPVerboseGate(logging.Filter):
+        def filter(self, record):
+            return config.VERBOSE
+
+    logging.getLogger("mcp.client.streamable_http").addFilter(_MCPVerboseGate())
+
+    # Attach verbose handlers for HTTP and MCP transport details
+    httpx_handler = _VerboseLogHandler("httpx")
+    httpx_handler.setLevel(logging.DEBUG)
+    httpx_logger = logging.getLogger("httpx")
+    httpx_logger.addHandler(httpx_handler)
+    httpx_logger.setLevel(logging.DEBUG)
+
+    mcp_handler = _VerboseLogHandler("mcp")
+    mcp_handler.setLevel(logging.DEBUG)
+    mcp_logger = logging.getLogger("mcp.client.streamable_http")
+    mcp_logger.addHandler(mcp_handler)
+    mcp_logger.setLevel(logging.DEBUG)
 
 
 async def listen_for_toggle():
