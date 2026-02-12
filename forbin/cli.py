@@ -1,13 +1,23 @@
 import asyncio
 import sys
+import time
 
 from rich.prompt import Prompt
 
 from . import config
-from .config import validate_config
+from .config import (
+    validate_config,
+    is_first_run,
+    run_first_time_setup,
+    reload_config,
+    load_config,
+    save_config,
+    CONFIG_FILE,
+)
 from .utils import setup_logging, listen_for_toggle
 from .client import connect_and_list_tools, wake_up_server
 from .tools import get_tool_parameters, call_tool
+from .verbose import vlog_timing
 from .display import (
     display_tools,
     display_tool_header,
@@ -20,6 +30,147 @@ from .display import (
 )
 
 
+def _toggle_verbose():
+    """Toggle verbose mode and persist the setting."""
+    config.VERBOSE = not config.VERBOSE
+    # Persist to config file
+    cfg = load_config()
+    cfg["VERBOSE"] = str(config.VERBOSE).lower()
+    save_config(cfg)
+    status = "[bold green]ON[/bold green]" if config.VERBOSE else "[bold red]OFF[/bold red]"
+    console.print(f"\n[bold cyan]Verbose logging toggled {status}[/bold cyan]\n")
+
+
+def handle_config_command():
+    """Show current config and allow interactive editing. Loops until user exits. Returns True if any setting changed."""
+    changed = False
+
+    while True:
+        token_display = (
+            config.MCP_TOKEN[:8] + "..."
+            if config.MCP_TOKEN and len(config.MCP_TOKEN) > 8
+            else config.MCP_TOKEN or "[dim]Not set[/dim]"
+        )
+        verbose_display = "[green]ON[/green]" if config.VERBOSE else "[red]OFF[/red]"
+
+        console.print()
+        console.print("[bold underline]Configuration[/bold underline]")
+        console.print()
+        console.print(
+            f"  [bold cyan]1.[/bold cyan] MCP_SERVER_URL:  {config.MCP_SERVER_URL or '[dim]Not set[/dim]'}"
+        )
+        console.print(f"  [bold cyan]2.[/bold cyan] MCP_TOKEN:       {token_display}")
+        console.print(
+            f"  [bold cyan]3.[/bold cyan] MCP_HEALTH_URL:  {config.MCP_HEALTH_URL or '[dim]Not set[/dim]'}"
+        )
+        console.print(f"  [bold cyan]4.[/bold cyan] VERBOSE:         {verbose_display}")
+        console.print()
+        console.print(f"  [dim]Config file: {CONFIG_FILE}[/dim]")
+        console.print()
+
+        choice = Prompt.ask("Edit setting (1-4) or press Enter to go back").strip()
+        if not choice:
+            return changed
+
+        if choice == "4":
+            _toggle_verbose()
+            continue
+
+        keys = {
+            "1": ("MCP_SERVER_URL", "MCP Server URL"),
+            "2": ("MCP_TOKEN", "MCP Token"),
+            "3": ("MCP_HEALTH_URL", "Health Check URL"),
+        }
+
+        if choice not in keys:
+            console.print("[red]Invalid choice.[/red]")
+            continue
+
+        key, label = keys[choice]
+        current = config.get_setting(key) or ""
+
+        console.print()
+        if current:
+            display = current[:40] + ("..." if len(current) > 40 else "")
+            console.print(f"  [dim]Current: {display}[/dim]")
+        console.print("  [dim]Enter new value, 'clear' to remove, or Enter to keep current[/dim]")
+        new_value = input(f"  {label}: ").strip()
+
+        if not new_value:
+            console.print("[dim]  No change.[/dim]")
+            continue
+
+        cfg = load_config()
+        if new_value.lower() == "clear":
+            cfg.pop(key, None)
+        else:
+            cfg[key] = new_value
+
+        if save_config(cfg):
+            reload_config()
+            console.print(f"[green]  Updated {key}.[/green]")
+            changed = True
+        else:
+            console.print("[red]  Failed to save setting.[/red]")
+
+
+async def reconnect(old_session):
+    """Clean up old session and establish a new connection. Returns (mcp_session, tools) or (None, None)."""
+    console.print("[bold cyan]Reconnecting...[/bold cyan]")
+    display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
+    overall_start = time.monotonic()
+
+    if old_session:
+        try:
+            await old_session.cleanup()
+        except Exception:
+            pass
+
+    # Determine total steps
+    total_steps = 2 if config.MCP_HEALTH_URL else 1
+    current_step = 1
+
+    # Step 1: Wake up server if health URL is configured
+    if config.MCP_HEALTH_URL:
+        display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
+        wake_start = time.monotonic()
+        is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
+
+        if not is_awake:
+            console.print("[bold red]  Failed to wake up server[/bold red]\n")
+            return None, None
+
+        display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+        vlog_timing("Wake-up step", time.monotonic() - wake_start)
+
+        with console.status(
+            "  [dim]Waiting for server initialization (5s)...[/dim]", spinner="dots"
+        ):
+            await asyncio.sleep(5)
+
+        console.print()
+        current_step += 1
+
+    # Step 2: Connect and list tools
+    display_step(current_step, total_steps, "CONNECTING AND LISTING TOOLS", "in_progress")
+    connect_start = time.monotonic()
+    mcp_session, tools = await connect_and_list_tools(max_attempts=3, wait_seconds=5)
+
+    if not mcp_session:
+        console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
+        return None, None
+
+    display_step(current_step, total_steps, "CONNECTING AND LISTING TOOLS", "success", update=True)
+    vlog_timing("Connect+list step", time.monotonic() - connect_start)
+    vlog_timing("Total reconnect", time.monotonic() - overall_start)
+    console.print()
+    console.print(
+        f"[bold green]Connected![/bold green] Server has [bold cyan]{len(tools)}[/bold cyan] tools available"
+    )
+    console.print()
+    return mcp_session, tools
+
+
 async def test_connectivity():
     """Test connectivity to the MCP server."""
     # Start background listener for 'v' key toggle
@@ -28,6 +179,7 @@ async def test_connectivity():
     try:
         display_logo()
         display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
+        overall_start = time.monotonic()
 
         # Determine total steps
         total_steps = 2 if config.MCP_HEALTH_URL else 1
@@ -36,6 +188,7 @@ async def test_connectivity():
         # Step 1: Wake up server if health URL is configured
         if config.MCP_HEALTH_URL:
             display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
+            wake_start = time.monotonic()
             is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
 
             if not is_awake:
@@ -43,6 +196,7 @@ async def test_connectivity():
                 return
 
             display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+            vlog_timing("Wake-up step", time.monotonic() - wake_start)
 
             # Wait for MCP server to initialize (shorter wait like working example)
             with console.status(
@@ -56,6 +210,7 @@ async def test_connectivity():
         # Step 2: Connect to MCP server AND list tools in one operation
         # (This avoids session expiry between connect and list_tools)
         display_step(current_step, total_steps, "CONNECTING AND LISTING TOOLS", "in_progress")
+        connect_start = time.monotonic()
         mcp_session, tools = await connect_and_list_tools(max_attempts=3, wait_seconds=5)
 
         if not mcp_session:
@@ -69,6 +224,8 @@ async def test_connectivity():
         display_step(
             current_step, total_steps, "CONNECTING AND LISTING TOOLS", "success", update=True
         )
+        vlog_timing("Connect+list step", time.monotonic() - connect_start)
+        vlog_timing("Total test time", time.monotonic() - overall_start)
         console.print()
         console.print(
             f"[bold green]Test complete![/bold green] Server has [bold cyan]{len(tools)}[/bold cyan] tools available"
@@ -89,61 +246,35 @@ async def test_connectivity():
 
 async def interactive_session():
     """Run an interactive session to explore and test MCP tools."""
-    validate_config()
-    setup_logging()
-
     # Start background listener for 'v' key toggle during setup
     listener_task = asyncio.create_task(listen_for_toggle())
     mcp_session = None
 
     try:
-        # Display logo and configuration
+        # Display logo first
         display_logo()
-        display_config_panel(config.MCP_SERVER_URL, config.MCP_HEALTH_URL)
 
-        # Determine total steps
-        total_steps = 2 if config.MCP_HEALTH_URL else 1
-        current_step = 1
-
-        # Step 1: Wake up server if health URL is configured
-        if config.MCP_HEALTH_URL:
-            display_step(current_step, total_steps, "WAKING UP SERVER", "in_progress")
-            is_awake = await wake_up_server(config.MCP_HEALTH_URL, max_attempts=6, wait_seconds=5)
-
-            if not is_awake:
-                console.print(
-                    "[bold red]  Failed to wake up server after all attempts[/bold red]\n"
-                )
+        # Check config, run wizard if needed
+        if not validate_config():
+            if is_first_run():
+                run_first_time_setup()
+            else:
+                console.print("[bold red]Configuration incomplete.[/bold red]")
+                console.print("MCP_SERVER_URL and MCP_TOKEN are required.")
+                console.print(f"[dim]Run 'forbin --config' to set up, or edit {CONFIG_FILE}[/dim]")
+                console.print()
                 return
 
-            display_step(current_step, total_steps, "WAKING UP SERVER", "success", update=True)
+            # Re-check after wizard
+            if not validate_config():
+                console.print("[bold red]Configuration still incomplete. Exiting.[/bold red]")
+                return
 
-            # Wait for MCP server to initialize (shorter wait like working example)
-            with console.status(
-                "  [dim]Waiting for server initialization (5s)...[/dim]", spinner="dots"
-            ):
-                await asyncio.sleep(5)
-
-            console.print()
-            current_step += 1
-
-        # Step 2: Connect to MCP server AND list tools in one operation
-        # (This avoids session expiry between connect and list_tools)
-        display_step(current_step, total_steps, "CONNECTING AND LISTING TOOLS", "in_progress")
-        mcp_session, tools = await connect_and_list_tools(max_attempts=3, wait_seconds=5)
+        # Initial connection
+        mcp_session, tools = await reconnect(None)
 
         if not mcp_session:
-            console.print("[bold red]  Failed to connect to MCP server[/bold red]\n")
-            console.print("[yellow]This may indicate:[/yellow]")
-            console.print("  - The MCP server is not properly configured")
-            console.print("  - The server endpoint URL is incorrect")
-            console.print("  - The server is returning errors for MCP requests")
             return
-
-        display_step(
-            current_step, total_steps, "CONNECTING AND LISTING TOOLS", "success", update=True
-        )
-        console.print()
 
         if not tools:
             console.print("[yellow]No tools available on this server.[/yellow]")
@@ -169,6 +300,7 @@ async def interactive_session():
                     "[green]ON[/green]" if config.VERBOSE else "[red]OFF[/red]"
                 )
             )
+            console.print("  [bold cyan]c[/bold cyan]      - Configuration settings")
             console.print("  [bold cyan]q[/bold cyan]      - Quit")
             console.print()
 
@@ -179,11 +311,20 @@ async def interactive_session():
                 break
 
             if choice == "v":
-                config.VERBOSE = not config.VERBOSE
-                status = (
-                    "[bold green]ON[/bold green]" if config.VERBOSE else "[bold red]OFF[/bold red]"
-                )
-                console.print(f"\n[bold cyan]Verbose logging toggled {status}[/bold cyan]\n")
+                _toggle_verbose()
+                continue
+
+            if choice == "c":
+                changed = handle_config_command()
+                if changed:
+                    new_session, new_tools = await reconnect(mcp_session)
+                    if new_session:
+                        mcp_session = new_session
+                        tools = new_tools
+                    else:
+                        console.print(
+                            "[yellow]Reconnection failed. Keeping current connection.[/yellow]\n"
+                        )
                 continue
 
             # Try to parse as tool number
@@ -219,15 +360,20 @@ async def interactive_session():
                             break
 
                         elif tool_choice == "v":
-                            config.VERBOSE = not config.VERBOSE
-                            status = (
-                                "[bold green]ON[/bold green]"
-                                if config.VERBOSE
-                                else "[bold red]OFF[/bold red]"
-                            )
-                            console.print(
-                                f"\n[bold cyan]Verbose logging toggled {status}[/bold cyan]\n"
-                            )
+                            _toggle_verbose()
+
+                        elif tool_choice == "c":
+                            changed = handle_config_command()
+                            if changed:
+                                new_session, new_tools = await reconnect(mcp_session)
+                                if new_session:
+                                    mcp_session = new_session
+                                    tools = new_tools
+                                else:
+                                    console.print(
+                                        "[yellow]Reconnection failed. Keeping current connection.[/yellow]\n"
+                                    )
+                                break  # Back to tool list since tools may have changed
 
                         else:
                             console.print(
@@ -264,17 +410,25 @@ async def async_main():
             if sys.argv[1] in ("--test", "-t"):
                 await test_connectivity()
                 return
+            elif sys.argv[1] in ("--config", "-c"):
+                display_logo()
+                run_first_time_setup()
+                return
             elif sys.argv[1] in ("--help", "-h"):
                 display_logo()
                 console.print("\n[bold]Usage:[/bold]")
-                console.print("  forbin           Run interactive session")
-                console.print("  forbin --test    Test connectivity only")
-                console.print("  forbin --help    Show this help message")
+                console.print("  forbin            Run interactive session")
+                console.print("  forbin --test     Test connectivity only")
+                console.print("  forbin --config   Run configuration wizard")
+                console.print("  forbin --help     Show this help message")
                 console.print("\n[bold]Configuration:[/bold]")
-                console.print("  Set MCP_SERVER_URL, MCP_TOKEN, and optionally MCP_HEALTH_URL")
-                console.print("  in a .env file (see .env.example)")
+                console.print(f"  Config file: {CONFIG_FILE}")
+                console.print("  Settings can also be set via .env file or environment variables")
+                console.print("  Priority: .env / environment > ~/.forbin/config.json")
                 console.print("\n[bold]Interactive Shortcuts:[/bold]")
-                console.print("  [bold cyan]'v'[/bold cyan] - Toggle verbose logging at any time")
+                console.print("  [bold cyan]'v'[/bold cyan]   - Toggle verbose logging at any time")
+                console.print("  [bold cyan]'c'[/bold cyan]   - View/update configuration")
+                console.print("  [bold cyan]ESC[/bold cyan]   - Cancel a running tool call")
                 return
 
         # Run interactive session by default
