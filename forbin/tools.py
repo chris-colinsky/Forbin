@@ -129,7 +129,12 @@ async def _wait_for_escape():
         await asyncio.Event().wait()
         return
 
-    fd = sys.stdin.fileno()
+    try:
+        fd = sys.stdin.fileno()
+    except (AttributeError, OSError):
+        # stdin is redirected (e.g. in pytest); wait forever
+        await asyncio.Event().wait()
+        return
     if not sys.stdin.isatty():
         await asyncio.Event().wait()
         return
